@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.tools.indicators import extract_indicators
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -29,13 +30,17 @@ def health():
 
 @app.post("/investigate")
 def investigate(request: InvestigationRequest):
+    indicators = extract_indicators(request.content)
+
     return {
         "status": "completed",
-        "threat_score": 50,
-        "verdict": "Analysis pending",
+        "indicators": indicators,
+        "threat_score": 0,
+        "verdict": "Evidence collection pending",
         "confidence": 0,
         "evidence": [
-            "Input received successfully",
-            "Frontend connected to backend"
-        ]
+            f"Extracted {len(indicators['urls'])} URL(s)",
+            f"Extracted {len(indicators['domains'])} domain(s)",
+            f"Extracted {len(indicators['emails'])} email address(es)",
+        ],
     }
