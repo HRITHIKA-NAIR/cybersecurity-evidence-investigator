@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.tools.indicators import extract_indicators
 from app.tools.url_analysis import analyze_url
 from app.tools.virustotal import check_domain
+from app.tools.ai_analysis import analyze_evidence
 from pydantic import BaseModel
 
 app = FastAPI(title="Cybersecurity Evidence Investigator")
@@ -65,18 +66,30 @@ def investigate(request: InvestigationRequest):
             )
         else:
             evidence.append(
-                f"VirusTotal: {result.get('message', 'No result')} "
+                f"VirusTotal: "
+                f"{result.get('message', 'No result')} "
                 f"for {result['domain']}"
             )
+
+    ai_result = analyze_evidence(
+        request.content,
+        indicators,
+        url_results,
+        domain_results,
+    )
 
     return {
         "status": "completed",
         "indicators": indicators,
         "url_analysis": url_results,
         "threat_intelligence": domain_results,
-        "threat_score": 0,
-        "verdict": "AI assessment pending",
-        "confidence": 0,
+        "threat_score": ai_result["threat_score"],
+        "verdict": ai_result["verdict"],
+        "confidence": ai_result["confidence"],
+        "reasoning": ai_result["reasoning"],
+        "insufficient_evidence": ai_result[
+            "insufficient_evidence"
+        ],
         "evidence": evidence,
         "stages": {
             "extract_indicators": True,
@@ -84,6 +97,7 @@ def investigate(request: InvestigationRequest):
             "investigate_domain": True,
             "gather_evidence": True,
             "counter_evidence": False,
-            "calculate_assessment": False,
+            "calculate_assessment":
+                ai_result["status"] == "success",
         },
     }

@@ -137,8 +137,15 @@ function App() {
 
             {result ? (
               <>
-                <p>{result.verdict}</p>
+                <p><strong>{result.verdict}</strong></p>
                 <p>Confidence: {result.confidence}%</p>
+                <p>{result.reasoning}</p>
+
+                {result.insufficient_evidence && (
+                  <p className="warning-text">
+                    Evidence is insufficient for a definitive conclusion.
+                  </p>
+                )}
               </>
             ) : (
               <p>No investigation has been run yet.</p>
