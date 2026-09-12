@@ -97,14 +97,14 @@ function App() {
         <section className="panel">
           <h2>Investigation Progress</h2>
 
-          <ul className="progress-list">
-            <li>{result ? "✓" : "○"} Extract indicators</li>
-            <li>○ Analyze URL</li>
-            <li>○ Investigate domain</li>
-            <li>○ Gather security evidence</li>
-            <li>○ Search counter-evidence</li>
-            <li>○ Calculate assessment</li>
-          </ul>
+         <ul className="progress-list">
+          <li>{result ? "✓" : "○"} Extract indicators</li>
+          <li>{result ? "✓" : "○"} Analyze URL</li>
+          <li>○ Investigate domain</li>
+          <li>○ Gather security evidence</li>
+          <li>○ Search counter-evidence</li>
+          <li>○ Calculate assessment</li>
+        </ul>
         </section>
 
         <section className="results-grid">
