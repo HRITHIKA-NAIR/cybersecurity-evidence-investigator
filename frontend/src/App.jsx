@@ -78,6 +78,7 @@ function App() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            investigation_id: result.investigation_id,
             content: submittedContent,
             indicators: result.indicators,
             url_analysis: result.url_analysis,

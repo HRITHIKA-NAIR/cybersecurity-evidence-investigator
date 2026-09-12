@@ -7,9 +7,11 @@ from app.tools.url_analysis import analyze_url
 from app.tools.virustotal import check_domain
 from app.tools.ai_analysis import analyze_evidence
 from app.tools.ai_analysis import (analyze_evidence,challenge_assessment,)
+from app.database import (get_investigations,init_db,save_challenge,save_investigation,)
 from pydantic import BaseModel
 
 app = FastAPI(title="Cybersecurity Evidence Investigator")
+init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +26,7 @@ class InvestigationRequest(BaseModel):
     content: str
 
 class ChallengeRequest(BaseModel):
+    investigation_id: int
     content: str
     indicators: dict
     url_analysis: list
@@ -86,8 +89,17 @@ def investigate(request: InvestigationRequest):
         domain_results,
     )
 
+    investigation_id = save_investigation(
+        request.content,
+        indicators,
+        url_results,
+        domain_results,
+        ai_result,
+    )
+
     return {
         "status": "completed",
+        "investigation_id": investigation_id,
         "indicators": indicators,
         "url_analysis": url_results,
         "threat_intelligence": domain_results,
@@ -120,4 +132,13 @@ def challenge(request: ChallengeRequest):
         request.original_assessment,
     )
 
+    save_challenge(
+        request.investigation_id,
+        result,
+    )
+
     return result
+
+@app.get("/investigations")
+def investigations():
+    return get_investigations()
