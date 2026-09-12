@@ -123,3 +123,37 @@ button:disabled {
 .warning-text {
   color: #f59e0b;
 }
+.error {
+  color: #ef4444;
+  margin-bottom: 0;
+}
+
+.warning-text {
+  color: #f59e0b;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.challenge-button {
+  margin-top: 18px;
+  background: #7c3aed;
+  color: white;
+}
+
+.challenge-panel {
+  border-color: #5b3fa3;
+}
+
+.challenge-panel h3 {
+  margin-top: 24px;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.challenge-panel li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
