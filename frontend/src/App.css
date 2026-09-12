@@ -110,3 +110,13 @@ button:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.error {
+  color: #ef4444;
+  margin-bottom: 0;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
