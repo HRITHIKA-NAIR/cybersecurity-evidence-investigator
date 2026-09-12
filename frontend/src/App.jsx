@@ -99,11 +99,11 @@ function App() {
 
           <ul className="progress-list">
             <li>{result ? "✓" : "○"} Extract indicators</li>
-            <li>{result ? "✓" : "○"} Analyze URL</li>
-            <li>{result ? "✓" : "○"} Investigate domain</li>
-            <li>{result ? "✓" : "○"} Gather security evidence</li>
-            <li>{result ? "✓" : "○"} Search counter-evidence</li>
-            <li>{result ? "✓" : "○"} Calculate assessment</li>
+            <li>○ Analyze URL</li>
+            <li>○ Investigate domain</li>
+            <li>○ Gather security evidence</li>
+            <li>○ Search counter-evidence</li>
+            <li>○ Calculate assessment</li>
           </ul>
         </section>
 
