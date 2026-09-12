@@ -141,4 +141,4 @@ def challenge(request: ChallengeRequest):
 
 @app.get("/investigations")
 def investigations():
-    return get_investigations()
+    return get_investigations(limit=10)

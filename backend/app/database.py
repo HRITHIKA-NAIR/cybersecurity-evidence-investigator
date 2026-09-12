@@ -87,14 +87,16 @@ def save_challenge(investigation_id, challenge_result):
         )
 
 
-def get_investigations():
+def get_investigations(limit=10):
     with get_connection() as connection:
         rows = connection.execute(
             """
             SELECT *
             FROM investigations
             ORDER BY created_at DESC
-            """
+            LIMIT ?
+            """,
+            (limit,),
         ).fetchall()
 
     investigations = []
@@ -105,9 +107,11 @@ def get_investigations():
         investigation["indicators"] = json.loads(
             investigation["indicators"]
         )
+
         investigation["url_analysis"] = json.loads(
             investigation["url_analysis"]
         )
+
         investigation["threat_intelligence"] = json.loads(
             investigation["threat_intelligence"]
         )

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 function App() {
@@ -12,6 +12,30 @@ function App() {
 
   const [challengeResult, setChallengeResult] = useState(null);
   const [challengeLoading, setChallengeLoading] = useState(false);
+
+  const [history, setHistory] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const loadHistory = async () => {
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8001/investigations"
+      );
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      setHistory(data.slice(0, 10));
+    } catch {
+      console.log("History unavailable");
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const investigate = async () => {
     if (!content.trim() && !file) {
@@ -52,6 +76,7 @@ function App() {
       const data = await response.json();
 
       setResult(data);
+      await loadHistory();
     } catch {
       setError(
         "Could not connect to the investigation service."
@@ -101,6 +126,7 @@ function App() {
       const data = await response.json();
 
       setChallengeResult(data);
+      await loadHistory();
     } catch {
       setError(
         "Could not challenge the current conclusion."
@@ -115,9 +141,7 @@ function App() {
       <header className="header">
         <div>
           <h1>EVIDENCE</h1>
-          <p>
-            Cybersecurity Evidence Investigator
-          </p>
+          <p>Cybersecurity Evidence Investigator</p>
         </div>
 
         <div className="status">
@@ -126,9 +150,124 @@ function App() {
         </div>
       </header>
 
+      {historyOpen && (
+        <>
+          <div
+            className="history-backdrop"
+            onClick={() => setHistoryOpen(false)}
+          ></div>
+
+          <aside className="history-sidebar">
+            <div className="history-sidebar-header">
+              <div className="history-sidebar-title">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 8v5l3 2M3.05 11a9 9 0 1 0 2.64-5.36L3 8M3 3v5h5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+
+                <span>HISTORY</span>
+              </div>
+
+              <button
+                className="history-close"
+                onClick={() => setHistoryOpen(false)}
+                aria-label="Close history"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="history-list">
+              {history.length > 0 ? (
+                history.map((item) => (
+                  <div
+                    className="history-item"
+                    key={item.id}
+                  >
+                    <div className="history-main">
+                      <span className="history-id">
+                        CASE #{item.id}
+                      </span>
+
+                      <span className="history-verdict">
+                        {item.verdict}
+                      </span>
+                    </div>
+
+                    <div className="history-details">
+                      <span>
+                        Score {item.threat_score}/100
+                      </span>
+
+                      <span>
+                        Confidence {item.confidence}%
+                      </span>
+                    </div>
+
+                    <div className="history-status">
+                      {item.challenge_result
+                        ? "Challenged"
+                        : "Initial assessment"}
+                    </div>
+
+                    <div className="history-input">
+                      {item.content.length > 90
+                        ? `${item.content.slice(0, 90)}...`
+                        : item.content}
+                    </div>
+
+                    <div className="history-date">
+                      {new Date(
+                        `${item.created_at}Z`
+                      ).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="history-empty">
+                  No investigations stored yet.
+                </p>
+              )}
+            </div>
+          </aside>
+        </>
+      )}
+
       <main className="dashboard">
         <section className="panel">
-          <h2>Investigate</h2>
+          <div className="investigate-heading">
+            <h2>Investigate</h2>
+
+            <button
+              className="history-button"
+              onClick={() => setHistoryOpen(true)}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 8v5l3 2M3.05 11a9 9 0 1 0 2.64-5.36L3 8M3 3v5h5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+
+              HISTORY
+            </button>
+          </div>
 
           <label className="upload-box">
             <span className="upload-title">
@@ -182,14 +321,11 @@ function App() {
         </section>
 
         <section className="panel">
-          <h2>
-            Investigation Progress
-          </h2>
+          <h2>Investigation Progress</h2>
 
           <ul className="progress-list">
             <li>
-              {result?.stages
-                ?.extract_indicators
+              {result?.stages?.extract_indicators
                 ? "✓"
                 : "○"}{" "}
               Extract indicators
@@ -203,16 +339,14 @@ function App() {
             </li>
 
             <li>
-              {result?.stages
-                ?.investigate_domain
+              {result?.stages?.investigate_domain
                 ? "✓"
                 : "○"}{" "}
               Investigate domain
             </li>
 
             <li>
-              {result?.stages
-                ?.gather_evidence
+              {result?.stages?.gather_evidence
                 ? "✓"
                 : "○"}{" "}
               Gather security evidence
@@ -226,8 +360,7 @@ function App() {
             </li>
 
             <li>
-              {result?.stages
-                ?.calculate_assessment
+              {result?.stages?.calculate_assessment
                 ? "✓"
                 : "○"}{" "}
               Calculate assessment
@@ -252,36 +385,26 @@ function App() {
             {result ? (
               <>
                 <p>
-                  <strong>
-                    {result.verdict}
-                  </strong>
+                  <strong>{result.verdict}</strong>
                 </p>
 
                 <p>
-                  Confidence:{" "}
-                  {result.confidence}%
+                  Confidence: {result.confidence}%
                 </p>
 
-                <p>
-                  {result.reasoning}
-                </p>
+                <p>{result.reasoning}</p>
 
                 {result.insufficient_evidence && (
                   <p className="warning-text">
-                    Evidence is
-                    insufficient for a
+                    Evidence is insufficient for a
                     definitive conclusion.
                   </p>
                 )}
 
                 <button
                   className="challenge-button"
-                  onClick={
-                    challengeConclusion
-                  }
-                  disabled={
-                    challengeLoading
-                  }
+                  onClick={challengeConclusion}
+                  disabled={challengeLoading}
                 >
                   {challengeLoading
                     ? "Challenging Conclusion..."
@@ -290,8 +413,7 @@ function App() {
               </>
             ) : (
               <p>
-                No investigation has been
-                run yet.
+                No investigation has been run yet.
               </p>
             )}
           </div>
@@ -312,26 +434,21 @@ function App() {
                 )}
               </ul>
             ) : (
-              <p>
-                No evidence was collected.
-              </p>
+              <p>No evidence was collected.</p>
             )
           ) : (
             <p>
-              Evidence will appear here
-              after investigation.
+              Evidence will appear here after
+              investigation.
             </p>
           )}
         </section>
 
         {challengeResult && (
           <section className="panel challenge-panel">
-            <h2>
-              Counter-Evidence Review
-            </h2>
+            <h2>Counter-Evidence Review</h2>
 
-            {challengeResult
-              .counter_evidence?.length >
+            {challengeResult.counter_evidence?.length >
             0 ? (
               <ul>
                 {challengeResult.counter_evidence.map(
@@ -344,38 +461,25 @@ function App() {
               </ul>
             ) : (
               <p>
-                No meaningful
-                counter-evidence was
-                identified in the
-                collected evidence.
+                No meaningful counter-evidence was
+                identified in the collected evidence.
               </p>
             )}
 
-            <h3>
-              Revised Assessment
-            </h3>
+            <h3>Revised Assessment</h3>
 
             <p>
               <strong>
-                {
-                  challengeResult.revised_verdict
-                }
+                {challengeResult.revised_verdict}
               </strong>
             </p>
 
             <p>
               Confidence:{" "}
-              {
-                challengeResult.revised_confidence
-              }
-              %
+              {challengeResult.revised_confidence}%
             </p>
 
-            <p>
-              {
-                challengeResult.reasoning
-              }
-            </p>
+            <p>{challengeResult.reasoning}</p>
 
             <p>
               Conclusion changed:{" "}
