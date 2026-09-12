@@ -98,13 +98,30 @@ function App() {
           <h2>Investigation Progress</h2>
 
          <ul className="progress-list">
-          <li>{result ? "✓" : "○"} Extract indicators</li>
-          <li>{result ? "✓" : "○"} Analyze URL</li>
-          <li>○ Investigate domain</li>
-          <li>○ Gather security evidence</li>
-          <li>○ Search counter-evidence</li>
-          <li>○ Calculate assessment</li>
-        </ul>
+          <li>
+            {result?.stages?.extract_indicators ? "✓" : "○"} Extract indicators
+          </li>
+
+          <li>
+            {result?.stages?.analyze_url ? "✓" : "○"} Analyze URL
+          </li>
+
+          <li>
+            {result?.stages?.investigate_domain ? "✓" : "○"} Investigate domain
+          </li>
+
+          <li>
+            {result?.stages?.gather_evidence ? "✓" : "○"} Gather security evidence
+          </li>
+
+          <li>
+            {result?.stages?.counter_evidence ? "✓" : "○"} Search counter-evidence
+          </li>
+
+          <li>
+            {result?.stages?.calculate_assessment ? "✓" : "○"} Calculate assessment
+          </li>
+         </ul>
         </section>
 
         <section className="results-grid">

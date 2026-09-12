@@ -1,7 +1,10 @@
 from fastapi import FastAPI
-from app.tools.indicators import extract_indicators
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from app.tools.indicators import extract_indicators
 from app.tools.url_analysis import analyze_url
+from app.tools.virustotal import check_domain
 from pydantic import BaseModel
 
 app = FastAPI(title="Cybersecurity Evidence Investigator")
@@ -38,6 +41,11 @@ def investigate(request: InvestigationRequest):
         for url in indicators["urls"]
     ]
 
+    domain_results = [
+        check_domain(domain)
+        for domain in indicators["domains"]
+    ]
+
     evidence = [
         f"Extracted {len(indicators['urls'])} URL(s)",
         f"Extracted {len(indicators['domains'])} domain(s)",
@@ -48,12 +56,34 @@ def investigate(request: InvestigationRequest):
         for finding in result["findings"]:
             evidence.append(finding["message"])
 
+    for result in domain_results:
+        if result["status"] == "success":
+            evidence.append(
+                f"VirusTotal: {result['malicious']} malicious, "
+                f"{result['suspicious']} suspicious detections for "
+                f"{result['domain']}"
+            )
+        else:
+            evidence.append(
+                f"VirusTotal: {result.get('message', 'No result')} "
+                f"for {result['domain']}"
+            )
+
     return {
         "status": "completed",
         "indicators": indicators,
         "url_analysis": url_results,
+        "threat_intelligence": domain_results,
         "threat_score": 0,
-        "verdict": "External evidence collection pending",
+        "verdict": "AI assessment pending",
         "confidence": 0,
         "evidence": evidence,
+        "stages": {
+            "extract_indicators": True,
+            "analyze_url": True,
+            "investigate_domain": True,
+            "gather_evidence": True,
+            "counter_evidence": False,
+            "calculate_assessment": False,
+        },
     }
