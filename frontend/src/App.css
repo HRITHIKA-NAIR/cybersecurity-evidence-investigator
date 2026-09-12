@@ -1,0 +1,112 @@
+.app {
+  min-height: 100vh;
+  background: #0b0f14;
+  color: #e8edf2;
+  font-family: Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 40px;
+  border-bottom: 1px solid #25303b;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 2px;
+}
+
+.header p {
+  margin: 4px 0 0;
+  color: #8d9aa6;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  background: #31c48d;
+  border-radius: 50%;
+}
+
+.dashboard {
+  width: min(1100px, 92%);
+  margin: 30px auto;
+}
+
+.panel {
+  background: #111820;
+  border: 1px solid #25303b;
+  border-radius: 10px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b0f14;
+  color: #e8edf2;
+  border: 1px solid #33414f;
+  border-radius: 8px;
+  padding: 14px;
+  resize: vertical;
+}
+
+button {
+  margin-top: 14px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 7px;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.progress-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  line-height: 2;
+  color: #aab5bf;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+}
+
+.score {
+  font-size: 36px;
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .header {
+    padding: 20px;
+  }
+
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+}
