@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import "./App.css";
 
 function App() {
@@ -33,9 +33,10 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  const openHistory = async () => {
+    await loadHistory();
+    setHistoryOpen(true);
+  };
 
   const investigate = async () => {
     if (!content.trim() && !file) {
@@ -249,7 +250,7 @@ function App() {
 
             <button
               className="history-button"
-              onClick={() => setHistoryOpen(true)}
+              onClick={openHistory}
             >
               <svg
                 viewBox="0 0 24 24"
