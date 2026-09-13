@@ -137,6 +137,22 @@ function App() {
     }
   };
 
+  const getRiskClass = (verdict) => {
+    if (verdict === "High Risk") {
+      return "risk-high";
+    }
+
+    if (verdict === "Suspicious") {
+      return "risk-suspicious";
+    }
+
+    if (verdict === "Low Risk") {
+      return "risk-low";
+    }
+
+    return "risk-inconclusive";
+  };
+
   return (
     <div className="app">
       <header className="header">
@@ -305,6 +321,12 @@ function App() {
             rows="8"
           />
 
+          <p className="processing-notice">
+            Submitted domains may be checked with VirusTotal
+            and content may be processed by Gemini. Avoid
+            submitting sensitive or confidential information.
+          </p>
+
           {error && (
             <p className="error">
               {error}
@@ -373,7 +395,13 @@ function App() {
           <div className="panel">
             <h2>Threat Score</h2>
 
-            <div className="score">
+            <div
+              className={`score ${
+                result
+                  ? getRiskClass(result.verdict)
+                  : ""
+              }`}
+            >
               {result
                 ? `${result.threat_score} / 100`
                 : "-- / 100"}
@@ -385,8 +413,12 @@ function App() {
 
             {result ? (
               <>
-                <p>
-                  <strong>{result.verdict}</strong>
+                <p
+                  className={`verdict-badge ${getRiskClass(
+                    result.verdict
+                  )}`}
+                >
+                  {result.verdict}
                 </p>
 
                 <p>
@@ -469,12 +501,13 @@ function App() {
 
             <h3>Revised Assessment</h3>
 
-            <p>
-              <strong>
-                {challengeResult.revised_verdict}
-              </strong>
+            <p
+              className={`verdict-badge ${getRiskClass(
+                challengeResult.revised_verdict
+              )}`}
+            >
+              {challengeResult.revised_verdict}
             </p>
-
             <p>
               Confidence:{" "}
               {challengeResult.revised_confidence}%
