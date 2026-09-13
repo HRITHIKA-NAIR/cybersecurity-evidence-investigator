@@ -1,0 +1,65 @@
+{
+  "evaluated_at": "2026-09-13T09:17:25.298521+00:00",
+  "total_cases": 5,
+  "correct_verdicts": 5,
+  "failed_requests": 0,
+  "verdict_accuracy_percent": 100.0,
+  "average_latency_seconds": 6.2,
+  "results": [
+    {
+      "id": "safe_url",
+      "description": "HTTPS URL with no malicious VirusTotal detections.",
+      "expected_verdict": "Low Risk",
+      "actual_verdict": "Low Risk",
+      "threat_score": 10,
+      "confidence": 85,
+      "insufficient_evidence": false,
+      "latency_seconds": 7.82,
+      "passed": true
+    },
+    {
+      "id": "ip_url",
+      "description": "HTTP URL using an IP address instead of a domain.",
+      "expected_verdict": "Suspicious",
+      "actual_verdict": "Suspicious",
+      "threat_score": 40,
+      "confidence": 70,
+      "insufficient_evidence": false,
+      "latency_seconds": 6.82,
+      "passed": true
+    },
+    {
+      "id": "suspicious_subdomains",
+      "description": "HTTP URL containing multiple subdomains.",
+      "expected_verdict": "Suspicious",
+      "actual_verdict": "Suspicious",
+      "threat_score": 30,
+      "confidence": 80,
+      "insufficient_evidence": false,
+      "latency_seconds": 7.26,
+      "passed": true
+    },
+    {
+      "id": "phishing_text",
+      "description": "Phishing-style urgency and credential request without external indicators.",
+      "expected_verdict": "Suspicious",
+      "actual_verdict": "Suspicious",
+      "threat_score": 75,
+      "confidence": 80,
+      "insufficient_evidence": false,
+      "latency_seconds": 4.58,
+      "passed": true
+    },
+    {
+      "id": "insufficient_evidence",
+      "description": "Ordinary text containing no meaningful cybersecurity evidence.",
+      "expected_verdict": "Inconclusive",
+      "actual_verdict": "Inconclusive",
+      "threat_score": 0,
+      "confidence": 0,
+      "insufficient_evidence": true,
+      "latency_seconds": 4.53,
+      "passed": true
+    }
+  ]
+}

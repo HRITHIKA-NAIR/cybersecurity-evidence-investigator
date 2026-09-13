@@ -1,0 +1,32 @@
+[
+  {
+    "id": "safe_url",
+    "content": "https://example.com",
+    "expected_verdict": "Low Risk",
+    "description": "HTTPS URL with no malicious VirusTotal detections."
+  },
+  {
+    "id": "ip_url",
+    "content": "http://192.168.1.50/login",
+    "expected_verdict": "Suspicious",
+    "description": "HTTP URL using an IP address instead of a domain."
+  },
+  {
+    "id": "suspicious_subdomains",
+    "content": "http://login.security.account.example.com/verify",
+    "expected_verdict": "Suspicious",
+    "description": "HTTP URL containing multiple subdomains."
+  },
+  {
+    "id": "phishing_text",
+    "content": "URGENT: Your account will be permanently suspended today. Confirm your password immediately to prevent account deletion.",
+    "expected_verdict": "Suspicious",
+    "description": "Phishing-style urgency and credential request without external indicators."
+  },
+  {
+    "id": "insufficient_evidence",
+    "content": "The team meeting has been moved to 3 PM tomorrow.",
+    "expected_verdict": "Inconclusive",
+    "description": "Ordinary text containing no meaningful cybersecurity evidence."
+  }
+]

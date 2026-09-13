@@ -3,6 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 load_dotenv()
 
@@ -49,12 +50,28 @@ Rules:
 - HTTPS is only a transport-security observation and does not prove legitimacy.
 - Zero VirusTotal detections does not prove that something is safe.
 - "Undetected" must not be treated as "harmless".
+- Absence of malicious evidence is not positive evidence of safety.
+- If the submitted content contains no cybersecurity-relevant evidence and no indicators or threat-intelligence evidence are available, return Inconclusive rather than Low Risk.
+- Low Risk requires actual supporting security evidence; it must not be based only on the absence of suspicious evidence.
 - Distinguish suspicious characteristics from confirmed malicious evidence.
 - Base the threat score, verdict, confidence, and reasoning only on the supplied evidence.
 - If the available evidence cannot support a confident conclusion, return Inconclusive.
 - Threat score must be an integer between 0 and 100.
 - Confidence must be an integer between 0 and 100.
 - Return JSON only.
+
+Verdict policy:
+- Low Risk: the supplied evidence contains affirmative benign indicators and no meaningful suspicious or malicious evidence. This does NOT mean guaranteed safe.
+- Suspicious: the supplied evidence contains suspicious characteristics but does not establish strong malicious evidence.
+- High Risk: the supplied evidence contains strong or confirmed malicious evidence.
+- Inconclusive: the supplied evidence is too limited, absent, conflicting, or weak to support a meaningful security assessment.
+
+Additional rules:
+- VirusTotal harmless classifications are affirmative benign evidence.
+- VirusTotal undetected classifications are NOT harmless evidence.
+- Zero malicious or suspicious detections alone does not prove safety.
+- When VirusTotal reports harmless classifications, zero malicious detections, zero suspicious detections, and no other suspicious findings are present, Low Risk is permitted.
+- Confidence represents the strength of evidence supporting the risk assessment, not confidence in being uncertain.
 
 Return exactly this structure:
 
@@ -90,6 +107,9 @@ Evidence:
                 response = client.models.generate_content(
                     model=model,
                     contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0,
+                    ),
                 )
 
                 print(f"Gemini model used: {model}")
@@ -113,6 +133,54 @@ Evidence:
             text = text[:-3]
 
         result = json.loads(text.strip())
+
+        no_indicators = (
+            not indicators.get("urls")
+            and not indicators.get("domains")
+            and not indicators.get("emails")
+        )
+
+        no_security_evidence = (
+            no_indicators
+            and not url_analysis
+            and not threat_intelligence
+        )
+
+        if (
+            no_security_evidence
+            and result.get("verdict") == "Inconclusive"
+        ):
+            return {
+                "status": "success",
+                "threat_score": 0,
+                "verdict": "Inconclusive",
+                "confidence": 0,
+                "reasoning": (
+                    "No cybersecurity indicators or supporting "
+                    "threat-intelligence evidence were available, "
+                    "so there is insufficient evidence for a "
+                    "definitive security assessment."
+                ),
+                "insufficient_evidence": True,
+            }
+
+        if (
+            no_security_evidence
+            and result.get("verdict") == "Low Risk"
+        ):
+            return {
+                "status": "success",
+                "threat_score": 0,
+                "verdict": "Inconclusive",
+                "confidence": 0,
+                "reasoning": (
+                    "No cybersecurity indicators or supporting "
+                    "threat-intelligence evidence were available, "
+                    "so there is insufficient evidence to classify "
+                    "the content as low risk."
+                ),
+                "insufficient_evidence": True,
+            }
 
         return {
             "status": "success",
@@ -232,6 +300,9 @@ Evidence and original assessment:
                 response = client.models.generate_content(
                     model=model,
                     contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0,
+                    ),
                 )
 
                 print(f"Challenge model used: {model}")
