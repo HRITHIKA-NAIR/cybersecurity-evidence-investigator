@@ -1,6 +1,10 @@
 import { useState } from "react";
 import "./App.css";
 
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://127.0.0.1:8001";
+
 function App() {
   const [content, setContent] = useState("");
   const [file, setFile] = useState(null);
@@ -19,7 +23,7 @@ function App() {
   const loadHistory = async () => {
     try {
       const response = await fetch(
-        "http://127.0.0.1:8001/investigations"
+        `${API_URL}/investigations`
       );
 
       if (!response.ok) {
@@ -58,7 +62,7 @@ function App() {
       setSubmittedContent(investigationContent);
 
       const response = await fetch(
-        "http://127.0.0.1:8001/investigate",
+        `${API_URL}/investigate`,
         {
           method: "POST",
           headers: {
@@ -97,7 +101,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8001/challenge",
+        `${API_URL}/challenge`,
         {
           method: "POST",
           headers: {

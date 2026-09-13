@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,14 +14,25 @@ from pydantic import BaseModel
 app = FastAPI(title="Cybersecurity Evidence Investigator")
 init_db()
 
+frontend_origin = os.getenv("FRONTEND_ORIGIN")
+
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+if frontend_origin:
+    allowed_origins.append(
+        frontend_origin.rstrip("/")
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class InvestigationRequest(BaseModel):
     content: str
