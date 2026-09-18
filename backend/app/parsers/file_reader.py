@@ -10,14 +10,18 @@ from app.detectors.qr_detector import (
     IMAGE_EXTENSIONS,
     inspect_qr,
 )
+from app.parsers.archive_parser import parse_archive
 from app.parsers.email_parser import parse_email
+from app.parsers.excel_parser import parse_excel
+from app.parsers.pdf_parser import parse_pdf
+from app.parsers.powerpoint_parser import parse_powerpoint
+from app.parsers.word_parser import parse_word
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 50_000
 MAX_ARCHIVE_ITEMS = 500
 MAX_ARCHIVE_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 100
-MAX_SPREADSHEET_CELLS = 20_000
 
 TEXT_EXTENSIONS = {
     ".txt",
@@ -169,141 +173,6 @@ def _detect_type(data: bytes) -> str:
     return "text"
 
 
-def _read_pdf(data: bytes) -> str:
-    from pypdf import PdfReader
-
-    reader = PdfReader(
-        BytesIO(data)
-    )
-
-    return "\n\n".join(
-        text
-        for page in reader.pages
-        if (
-            text := page.extract_text()
-        )
-    )
-
-
-def _read_docx(data: bytes) -> str:
-    from docx import Document
-
-    document = Document(
-        BytesIO(data)
-    )
-
-    parts = [
-        paragraph.text
-        for paragraph in document.paragraphs
-        if paragraph.text.strip()
-    ]
-
-    for table in document.tables:
-        for row in table.rows:
-            values = [
-                cell.text.strip()
-                for cell in row.cells
-            ]
-
-            if any(values):
-                parts.append(
-                    " | ".join(values)
-                )
-
-    return "\n".join(parts)
-
-
-def _read_pptx(data: bytes) -> str:
-    from pptx import Presentation
-
-    presentation = Presentation(
-        BytesIO(data)
-    )
-    parts = []
-
-    for number, slide in enumerate(
-        presentation.slides,
-        start=1,
-    ):
-        text = [
-            shape.text.strip()
-            for shape in slide.shapes
-            if (
-                hasattr(shape, "text")
-                and shape.text.strip()
-            )
-        ]
-
-        if text:
-            parts.append(
-                f"Slide {number}\n"
-                + "\n".join(text)
-            )
-
-    return "\n\n".join(parts)
-
-
-def _read_xlsx(data: bytes) -> str:
-    from openpyxl import load_workbook
-
-    workbook = load_workbook(
-        BytesIO(data),
-        read_only=True,
-        data_only=False,
-    )
-    parts = []
-    cells_seen = 0
-
-    try:
-        for sheet in workbook.worksheets:
-            parts.append(
-                f"Sheet: {sheet.title}"
-            )
-
-            for row in sheet.iter_rows(
-                values_only=True
-            ):
-                values = [
-                    str(value)
-                    for value in row
-                    if value is not None
-                ]
-                cells_seen += len(row)
-
-                if values:
-                    parts.append(
-                        " | ".join(values)
-                    )
-
-                if (
-                    cells_seen
-                    >= MAX_SPREADSHEET_CELLS
-                ):
-                    parts.append(
-                        "[Spreadsheet extraction "
-                        "limit reached]"
-                    )
-                    return "\n".join(
-                        parts
-                    )
-    finally:
-        workbook.close()
-
-    return "\n".join(parts)
-
-
-def _read_zip(data: bytes) -> str:
-    infos = _inspect_zip(data)
-
-    return (
-        "Archive contents:\n"
-        + "\n".join(
-            info.filename
-            for info in infos
-        )
-    )
-
-
 def read_uploaded_file(
     filename: str,
     content_type: str | None,
@@ -391,11 +260,11 @@ def read_uploaded_file(
     )
 
     readers = {
-        ".pdf": _read_pdf,
-        ".docx": _read_docx,
-        ".pptx": _read_pptx,
-        ".xlsx": _read_xlsx,
-        ".zip": _read_zip,
+        ".pdf": parse_pdf,
+        ".docx": parse_word,
+        ".pptx": parse_powerpoint,
+        ".xlsx": parse_excel,
+        ".zip": parse_archive,
     }
 
     email_analysis = None
