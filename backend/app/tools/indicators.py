@@ -1,5 +1,6 @@
 import re
-from urllib.parse import urlparse
+
+from app.tools.url_utils import normalize_http_url
 
 
 def extract_indicators(content: str):
@@ -20,7 +21,10 @@ def extract_indicators(content: str):
     domains = []
 
     for url in urls:
-        domain = urlparse(url).hostname
+        try:
+            _, domain = normalize_http_url(url)
+        except ValueError:
+            domain = None
 
         if domain and domain not in domains:
             domains.append(domain)
