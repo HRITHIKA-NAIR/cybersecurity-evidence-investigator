@@ -52,12 +52,24 @@ def _filename_findings(filename):
     findings = []
     suffixes = [suffix.lower() for suffix in Path(filename).suffixes]
 
-    if len(suffixes) >= 2 and suffixes[-2] in DECOY_EXTS and suffixes[-1] != suffixes[-2]:
-        findings.append(_finding(
-            "Double Extension", "Filename Deception", "Medium",
-            [f"Filename uses consecutive extensions: {''.join(suffixes[-2:])}"],
-            "Indicator Present", 95,
-        ))
+    if len(suffixes) >= 2:
+        final_extension = suffixes[-1]
+        decoy_extensions = [
+            suffix
+            for suffix in suffixes[:-1]
+            if suffix in DECOY_EXTS
+            and suffix != final_extension
+        ]
+
+        if decoy_extensions:
+            findings.append(_finding(
+                "Double Extension", "Filename Deception", "Medium",
+                [
+                    "Filename contains a decoy extension before "
+                    f"the final extension: {filename}"
+                ],
+                "Indicator Present", 95,
+            ))
 
     if any(char in filename for char in BIDI):
         findings.append(_finding(
@@ -250,6 +262,14 @@ def _archive_analysis(data):
         infos = archive.infolist()
 
     findings = []
+
+    for info in infos:
+        findings.extend(
+            _filename_findings(
+                Path(info.filename).name
+            )
+        )
+
     executable = [info.filename for info in infos if Path(info.filename).suffix.lower() in EXEC_EXTS]
     traversal = [
         info.filename for info in infos
