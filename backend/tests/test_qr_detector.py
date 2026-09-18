@@ -10,6 +10,22 @@ from app.parsers.file_reader import read_uploaded_file
 def _qr_png(payload: str) -> bytes:
     encoder = cv2.QRCodeEncoder_create()
     image = encoder.encode(payload)
+    image = cv2.resize(
+        image,
+        None,
+        fx=10,
+        fy=10,
+        interpolation=cv2.INTER_NEAREST,
+    )
+    image = cv2.copyMakeBorder(
+        image,
+        40,
+        40,
+        40,
+        40,
+        cv2.BORDER_CONSTANT,
+        value=255,
+    )
     ok, buffer = cv2.imencode(
         ".png",
         image,
