@@ -11,6 +11,28 @@ def get_connection():
     return connection
 
 
+def _deserialize(row):
+    if not row:
+        return None
+
+    investigation = dict(row)
+    investigation["indicators"] = json.loads(investigation["indicators"])
+    investigation["url_analysis"] = json.loads(investigation["url_analysis"])
+    investigation["threat_intelligence"] = json.loads(
+        investigation["threat_intelligence"]
+    )
+
+    if investigation["challenge_result"]:
+        investigation["challenge_result"] = json.loads(
+            investigation["challenge_result"]
+        )
+
+    investigation["insufficient_evidence"] = bool(
+        investigation["insufficient_evidence"]
+    )
+    return investigation
+
+
 def init_db():
     with get_connection() as connection:
         connection.execute(
@@ -68,7 +90,6 @@ def save_investigation(
                 int(ai_result["insufficient_evidence"]),
             ),
         )
-
         return cursor.lastrowid
 
 
@@ -87,6 +108,16 @@ def save_challenge(investigation_id, challenge_result):
         )
 
 
+def get_investigation(investigation_id):
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM investigations WHERE id = ?",
+            (investigation_id,),
+        ).fetchone()
+
+    return _deserialize(row)
+
+
 def get_investigations(limit=10):
     with get_connection() as connection:
         rows = connection.execute(
@@ -99,32 +130,4 @@ def get_investigations(limit=10):
             (limit,),
         ).fetchall()
 
-    investigations = []
-
-    for row in rows:
-        investigation = dict(row)
-
-        investigation["indicators"] = json.loads(
-            investigation["indicators"]
-        )
-
-        investigation["url_analysis"] = json.loads(
-            investigation["url_analysis"]
-        )
-
-        investigation["threat_intelligence"] = json.loads(
-            investigation["threat_intelligence"]
-        )
-
-        if investigation["challenge_result"]:
-            investigation["challenge_result"] = json.loads(
-                investigation["challenge_result"]
-            )
-
-        investigation["insufficient_evidence"] = bool(
-            investigation["insufficient_evidence"]
-        )
-
-        investigations.append(investigation)
-
-    return investigations
+    return [_deserialize(row) for row in rows]

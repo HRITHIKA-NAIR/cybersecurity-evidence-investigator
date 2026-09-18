@@ -1,30 +1,38 @@
 import os
-from fastapi import FastAPI
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
+from app.database import (
+    get_investigation,
+    get_investigations,
+    init_db,
+    save_challenge,
+    save_investigation,
+)
+from app.parsers.file_reader import (
+    FileReaderError,
+    MAX_UPLOAD_BYTES,
+    read_uploaded_file,
+)
+from app.tools.ai_analysis import analyze_evidence, challenge_assessment
 from app.tools.indicators import extract_indicators
 from app.tools.url_analysis import analyze_url
 from app.tools.virustotal import check_domain
-from app.tools.ai_analysis import analyze_evidence
-from app.tools.ai_analysis import (analyze_evidence,challenge_assessment,)
-from app.database import (get_investigations,init_db,save_challenge,save_investigation,)
-from pydantic import BaseModel
 
 app = FastAPI(title="Cybersecurity Evidence Investigator")
 init_db()
 
 frontend_origin = os.getenv("FRONTEND_ORIGIN")
-
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
 if frontend_origin:
-    allowed_origins.append(
-        frontend_origin.rstrip("/")
-    )
+    allowed_origins.append(frontend_origin.rstrip("/"))
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,31 +42,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class InvestigationRequest(BaseModel):
     content: str
 
+
 class ChallengeRequest(BaseModel):
     investigation_id: int
-    content: str
-    indicators: dict
-    url_analysis: list
-    threat_intelligence: list
-    original_assessment: dict
 
 
-@app.get("/")
-def root():
-    return {"message": "Cybersecurity Evidence Investigator API is running"}
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.post("/investigate")
-def investigate(request: InvestigationRequest):
-    indicators = extract_indicators(request.content)
+def _run_investigation(content: str, file_info: dict | None = None):
+    indicators = extract_indicators(content)
 
     url_results = [
         analyze_url(url)
@@ -76,6 +70,23 @@ def investigate(request: InvestigationRequest):
         f"Extracted {len(indicators['emails'])} email address(es)",
     ]
 
+    if file_info:
+        evidence.insert(
+            0,
+            (
+                f"File: {file_info['filename']} "
+                f"({file_info['extension']}, "
+                f"{file_info['size_bytes']} bytes)"
+            ),
+        )
+        evidence.append(
+            f"SHA-256: {file_info['sha256']}"
+        )
+        if file_info["truncated"]:
+            evidence.append(
+                "Extracted text was truncated for safe processing."
+            )
+
     for result in url_results:
         for finding in result["findings"]:
             evidence.append(finding["message"])
@@ -89,20 +100,20 @@ def investigate(request: InvestigationRequest):
             )
         else:
             evidence.append(
-                f"VirusTotal: "
+                "VirusTotal: "
                 f"{result.get('message', 'No result')} "
                 f"for {result['domain']}"
             )
 
     ai_result = analyze_evidence(
-        request.content,
+        content,
         indicators,
         url_results,
         domain_results,
     )
 
     investigation_id = save_investigation(
-        request.content,
+        content,
         indicators,
         url_results,
         domain_results,
@@ -112,6 +123,7 @@ def investigate(request: InvestigationRequest):
     return {
         "status": "completed",
         "investigation_id": investigation_id,
+        "file_info": file_info,
         "indicators": indicators,
         "url_analysis": url_results,
         "threat_intelligence": domain_results,
@@ -119,9 +131,7 @@ def investigate(request: InvestigationRequest):
         "verdict": ai_result["verdict"],
         "confidence": ai_result["confidence"],
         "reasoning": ai_result["reasoning"],
-        "insufficient_evidence": ai_result[
-            "insufficient_evidence"
-        ],
+        "insufficient_evidence": ai_result["insufficient_evidence"],
         "evidence": evidence,
         "stages": {
             "extract_indicators": True,
@@ -129,27 +139,78 @@ def investigate(request: InvestigationRequest):
             "investigate_domain": True,
             "gather_evidence": True,
             "counter_evidence": False,
-            "calculate_assessment":
-                ai_result["status"] == "success",
+            "calculate_assessment": ai_result["status"] == "success",
         },
     }
 
+
+@app.get("/")
+def root():
+    return {"message": "Cybersecurity Evidence Investigator API is running"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.post("/investigate")
+def investigate(request: InvestigationRequest):
+    return _run_investigation(request.content)
+
+
+@app.post("/investigate-file")
+async def investigate_file(file: UploadFile = File(...)):
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+
+    try:
+        parsed = read_uploaded_file(
+            file.filename or "upload",
+            file.content_type,
+            data,
+        )
+    except FileReaderError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=str(exc),
+        ) from exc
+
+    return await run_in_threadpool(
+        _run_investigation,
+        parsed["content"],
+        parsed["file_info"],
+    )
+
+
 @app.post("/challenge")
 def challenge(request: ChallengeRequest):
+    investigation = get_investigation(request.investigation_id)
+
+    if not investigation:
+        raise HTTPException(
+            status_code=404,
+            detail="Investigation not found.",
+        )
+
+    original_assessment = {
+        "threat_score": investigation["threat_score"],
+        "verdict": investigation["verdict"],
+        "confidence": investigation["confidence"],
+        "reasoning": investigation["reasoning"],
+    }
+
     result = challenge_assessment(
-        request.content,
-        request.indicators,
-        request.url_analysis,
-        request.threat_intelligence,
-        request.original_assessment,
+        investigation["content"],
+        investigation["indicators"],
+        investigation["url_analysis"],
+        investigation["threat_intelligence"],
+        original_assessment,
     )
 
-    save_challenge(
-        request.investigation_id,
-        result,
-    )
-
+    save_challenge(request.investigation_id, result)
     return result
+
 
 @app.get("/investigations")
 def investigations():

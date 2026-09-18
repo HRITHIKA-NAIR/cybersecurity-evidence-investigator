@@ -5,14 +5,28 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "http://127.0.0.1:8001";
 
+const SUPPORTED_FILES =
+  ".txt,.md,.csv,.json,.eml,.pdf,.docx,.pptx,.xlsx,.html,.htm,.svg,.zip";
+
+async function requestJson(url, options) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.detail || "The investigation request failed."
+    );
+  }
+
+  return data;
+}
+
 function App() {
   const [content, setContent] = useState("");
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const [submittedContent, setSubmittedContent] = useState("");
 
   const [challengeResult, setChallengeResult] = useState(null);
   const [challengeLoading, setChallengeLoading] = useState(false);
@@ -22,15 +36,9 @@ function App() {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch(
+      const data = await requestJson(
         `${API_URL}/investigations`
       );
-
-      if (!response.ok) {
-        return;
-      }
-
-      const data = await response.json();
       setHistory(data.slice(0, 10));
     } catch {
       console.log("History unavailable");
@@ -53,38 +61,40 @@ function App() {
     setChallengeResult(null);
 
     try {
-      let investigationContent = content;
+      let data;
 
       if (file) {
-        investigationContent = await file.text();
+        const formData = new FormData();
+        formData.append("file", file);
+
+        data = await requestJson(
+          `${API_URL}/investigate-file`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+      } else {
+        data = await requestJson(
+          `${API_URL}/investigate`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              content: content.trim(),
+            }),
+          }
+        );
       }
-
-      setSubmittedContent(investigationContent);
-
-      const response = await fetch(
-        `${API_URL}/investigate`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            content: investigationContent,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Investigation failed.");
-      }
-
-      const data = await response.json();
 
       setResult(data);
       await loadHistory();
-    } catch {
+    } catch (requestError) {
       setError(
-        "Could not connect to the investigation service."
+        requestError.message ||
+          "Could not connect to the investigation service."
       );
     } finally {
       setLoading(false);
@@ -100,7 +110,7 @@ function App() {
     setError("");
 
     try {
-      const response = await fetch(
+      const data = await requestJson(
         `${API_URL}/challenge`,
         {
           method: "POST",
@@ -109,32 +119,16 @@ function App() {
           },
           body: JSON.stringify({
             investigation_id: result.investigation_id,
-            content: submittedContent,
-            indicators: result.indicators,
-            url_analysis: result.url_analysis,
-            threat_intelligence:
-              result.threat_intelligence,
-            original_assessment: {
-              threat_score: result.threat_score,
-              verdict: result.verdict,
-              confidence: result.confidence,
-              reasoning: result.reasoning,
-            },
           }),
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Challenge failed.");
-      }
-
-      const data = await response.json();
-
       setChallengeResult(data);
       await loadHistory();
-    } catch {
+    } catch (requestError) {
       setError(
-        "Could not challenge the current conclusion."
+        requestError.message ||
+          "Could not challenge the current conclusion."
       );
     } finally {
       setChallengeLoading(false);
@@ -181,10 +175,7 @@ function App() {
           <aside className="history-sidebar">
             <div className="history-sidebar-header">
               <div className="history-sidebar-title">
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     d="M12 8v5l3 2M3.05 11a9 9 0 1 0 2.64-5.36L3 8M3 3v5h5"
                     fill="none"
@@ -209,50 +200,56 @@ function App() {
 
             <div className="history-list">
               {history.length > 0 ? (
-                history.map((item) => (
-                  <div
-                    className="history-item"
-                    key={item.id}
-                  >
-                    <div className="history-main">
-                      <span className="history-id">
-                        CASE #{item.id}
-                      </span>
+                history.map((item) => {
+                  const preview =
+                    item.content ||
+                    "No extractable text was stored.";
 
-                      <span className="history-verdict">
-                        {item.verdict}
-                      </span>
+                  return (
+                    <div
+                      className="history-item"
+                      key={item.id}
+                    >
+                      <div className="history-main">
+                        <span className="history-id">
+                          CASE #{item.id}
+                        </span>
+
+                        <span className="history-verdict">
+                          {item.verdict}
+                        </span>
+                      </div>
+
+                      <div className="history-details">
+                        <span>
+                          Score {item.threat_score}/100
+                        </span>
+
+                        <span>
+                          Confidence {item.confidence}%
+                        </span>
+                      </div>
+
+                      <div className="history-status">
+                        {item.challenge_result
+                          ? "Challenged"
+                          : "Initial assessment"}
+                      </div>
+
+                      <div className="history-input">
+                        {preview.length > 90
+                          ? `${preview.slice(0, 90)}...`
+                          : preview}
+                      </div>
+
+                      <div className="history-date">
+                        {new Date(
+                          `${item.created_at}Z`
+                        ).toLocaleString()}
+                      </div>
                     </div>
-
-                    <div className="history-details">
-                      <span>
-                        Score {item.threat_score}/100
-                      </span>
-
-                      <span>
-                        Confidence {item.confidence}%
-                      </span>
-                    </div>
-
-                    <div className="history-status">
-                      {item.challenge_result
-                        ? "Challenged"
-                        : "Initial assessment"}
-                    </div>
-
-                    <div className="history-input">
-                      {item.content.length > 90
-                        ? `${item.content.slice(0, 90)}...`
-                        : item.content}
-                    </div>
-
-                    <div className="history-date">
-                      {new Date(
-                        `${item.created_at}Z`
-                      ).toLocaleString()}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="history-empty">
                   No investigations stored yet.
@@ -272,10 +269,7 @@ function App() {
               className="history-button"
               onClick={openHistory}
             >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M12 8v5l3 2M3.05 11a9 9 0 1 0 2.64-5.36L3 8M3 3v5h5"
                   fill="none"
@@ -298,16 +292,19 @@ function App() {
             <span className="upload-text">
               {file
                 ? file.name
-                : "Choose a .txt or .eml file"}
+                : "Choose or drop a supported file"}
+            </span>
+
+            <span className="upload-formats">
+              PDF · DOCX · PPTX · XLSX · EML · ZIP ·
+              HTML/SVG · TXT/MD/CSV/JSON · max 10 MB
             </span>
 
             <input
               type="file"
-              accept=".txt,.eml"
+              accept={SUPPORTED_FILES}
               onChange={(event) =>
-                setFile(
-                  event.target.files[0] || null
-                )
+                setFile(event.target.files[0] || null)
               }
             />
           </label>
@@ -331,11 +328,7 @@ function App() {
             submitting sensitive or confidential information.
           </p>
 
-          {error && (
-            <p className="error">
-              {error}
-            </p>
-          )}
+          {error && <p className="error">{error}</p>}
 
           <button
             onClick={investigate}
@@ -380,9 +373,7 @@ function App() {
             </li>
 
             <li>
-              {challengeResult
-                ? "✓"
-                : "○"}{" "}
+              {challengeResult ? "✓" : "○"}{" "}
               Search counter-evidence
             </li>
 
@@ -512,6 +503,7 @@ function App() {
             >
               {challengeResult.revised_verdict}
             </p>
+
             <p>
               Confidence:{" "}
               {challengeResult.revised_confidence}%

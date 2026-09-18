@@ -26,11 +26,13 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 120px;
+  min-height: 132px;
   border: 1px dashed #465564;
   border-radius: 8px;
   cursor: pointer;
   background: #0b0f14;
+  padding: 16px;
+  text-align: center;
 }
 
 .upload-box:hover {
@@ -46,8 +48,15 @@ textarea {
   font-size: 14px;
 }
 
+.upload-formats {
+  color: #586572;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .upload-box input {
   margin-top: 5px;
+  max-width: 100%;
 }
 
 .divider {
