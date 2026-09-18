@@ -68,6 +68,10 @@ EXPECTED_MIME = {
     ".svg": {"image/svg+xml", "text/xml", "application/xml", "text/plain"},
     ".zip": {"application/zip", "application/x-zip-compressed"},
 }
+IGNORED_MARKUP_URLS = {
+    "http://www.w3.org/2000/svg",
+    "http://www.w3.org/1999/xlink",
+}
 SEVERITY_ORDER = {
     "Info": 0,
     "Low": 1,
@@ -629,7 +633,14 @@ def _markup_analysis(
             )
         )
 
-    urls = inspector.urls + URL_RE.findall(text)
+    urls = [
+        url
+        for url in (
+            inspector.urls
+            + URL_RE.findall(text)
+        )
+        if url not in IGNORED_MARKUP_URLS
+    ]
     return findings, _unique(urls)
 
 
