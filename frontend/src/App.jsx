@@ -323,9 +323,10 @@ function App() {
           />
 
           <p className="processing-notice">
-            Submitted domains may be checked with VirusTotal
-            and content may be processed by Gemini. Avoid
-            submitting sensitive or confidential information.
+            Submitted domains and public routing IPs may be
+            checked with VirusTotal, and extracted content may
+            be processed by Gemini. Avoid submitting sensitive
+            or confidential information.
           </p>
 
           {error && <p className="error">{error}</p>}
