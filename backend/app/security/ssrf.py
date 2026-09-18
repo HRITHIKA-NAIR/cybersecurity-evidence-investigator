@@ -30,6 +30,10 @@ class UnsafeRedirectTarget(ValueError):
     pass
 
 
+class URLResolutionError(RuntimeError):
+    pass
+
+
 def _blocked_ip(ip_text: str) -> bool:
     ip = ipaddress.ip_address(ip_text)
 
@@ -95,8 +99,8 @@ def validate_public_target(url: str) -> tuple[str, list[str]]:
             hostname,
             port,
         )
-    except socket.gaierror as exc:
-        raise UnsafeRedirectTarget(
+    except OSError as exc:
+        raise URLResolutionError(
             "Hostname could not be resolved."
         ) from exc
 
@@ -166,6 +170,16 @@ def safe_follow(url: str) -> dict:
             normalized, addresses = (
                 validate_public_target(current)
             )
+        except URLResolutionError as exc:
+            return {
+                "status": "error",
+                "reason": str(exc),
+                "hops": hops,
+                "redirect_count": max(
+                    0,
+                    len(hops) - 1,
+                ),
+            }
         except ValueError as exc:
             return {
                 "status": "blocked",
@@ -191,7 +205,7 @@ def safe_follow(url: str) -> dict:
                     len(hops) - 1,
                 ),
             }
-        except httpx.RequestError:
+        except (httpx.RequestError, ValueError):
             return {
                 "status": "error",
                 "reason": (
