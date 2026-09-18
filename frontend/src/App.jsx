@@ -294,7 +294,7 @@ function App() {
             <span className="upload-text">
               {file
                 ? file.name
-                : "Choose or drop a supported file"}
+                : "Choose a supported file"}
             </span>
 
             <span className="upload-formats">
@@ -327,10 +327,11 @@ function App() {
 
           <p className="processing-notice">
             Extracted domains and public routing IPs may be
-            checked with VirusTotal, and extracted content may
-            be processed by Gemini. Raw uploaded files are not
-            sent to VirusTotal by this workflow. Avoid submitting
-            sensitive or confidential information.
+            checked with VirusTotal. Submitted URLs may be
+            contacted by the backend for bounded redirect checks,
+            and extracted content may be processed by Gemini.
+            Raw uploaded files are not sent to VirusTotal.
+            Avoid submitting sensitive or confidential information.
           </p>
 
           {error && <p className="error">{error}</p>}
