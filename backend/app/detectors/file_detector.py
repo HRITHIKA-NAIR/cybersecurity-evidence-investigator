@@ -305,6 +305,7 @@ def _archive_analysis(data):
 def analyze_file(filename, extension, declared_mime, detected_type, data):
     findings = _filename_findings(filename) + _mime_findings(extension, declared_mime)
     urls = []
+    errors = []
 
     try:
         if extension in {".docx", ".pptx", ".xlsx"}:
@@ -317,8 +318,12 @@ def analyze_file(filename, extension, declared_mime, detected_type, data):
             extra_findings, urls = _archive_analysis(data)
         else:
             extra_findings = []
-    except (OSError, ValueError, zipfile.BadZipFile):
+    except Exception:
         extra_findings = []
+        urls = []
+        errors.append(
+            "Format-specific static inspection was unavailable."
+        )
 
     findings.extend(extra_findings)
     highest = max(
@@ -334,5 +339,6 @@ def analyze_file(filename, extension, declared_mime, detected_type, data):
         "finding_count": len(findings),
         "highest_severity": highest,
         "analysis_mode": "static_only",
+        "analysis_errors": errors,
         "executed": False,
     }
