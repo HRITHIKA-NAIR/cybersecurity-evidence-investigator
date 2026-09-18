@@ -19,7 +19,7 @@ from app.parsers.file_reader import (
 )
 from app.tools.ai_analysis import analyze_evidence, challenge_assessment
 from app.tools.indicators import extract_indicators
-from app.tools.url_analysis import analyze_url
+from app.tools.url_investigation import investigate_url
 from app.tools.virustotal import check_domain, check_ip
 
 app = FastAPI(title="Cybersecurity Evidence Investigator")
@@ -70,7 +70,7 @@ def _run_investigation(
                     indicators[key].append(item)
 
     url_results = [
-        analyze_url(url)
+        investigate_url(url)
         for url in indicators["urls"]
     ]
 
@@ -114,6 +114,21 @@ def _run_investigation(
             )
 
     if file_analysis:
+        qr_analysis = file_analysis.get(
+            "qr",
+            {},
+        )
+
+        for item in qr_analysis.get(
+            "payloads",
+            [],
+        ):
+            evidence.append(
+                "QR payload decoded from "
+                f"{item['source']}: "
+                f"{item['payload']}"
+            )
+
         for finding in file_analysis.get(
             "findings",
             [],
@@ -130,6 +145,22 @@ def _run_investigation(
     for result in url_results:
         for finding in result["findings"]:
             evidence.append(finding["message"])
+
+        redirect = result.get(
+            "redirect_analysis",
+            {},
+        )
+
+        if redirect.get("status") == "blocked":
+            evidence.append(
+                "Redirect safety: blocked — "
+                f"{redirect.get('reason', 'unsafe target')}"
+            )
+        elif redirect.get("redirect_count", 0):
+            evidence.append(
+                "Redirect chain followed safely: "
+                f"{redirect['redirect_count']} redirect(s)"
+            )
 
     if email_analysis:
         claimed_sender = email_analysis.get(
@@ -274,7 +305,8 @@ async def investigate_file(file: UploadFile = File(...)):
     await file.close()
 
     try:
-        parsed = read_uploaded_file(
+        parsed = await run_in_threadpool(
+            read_uploaded_file,
             file.filename or "upload",
             file.content_type,
             data,

@@ -6,6 +6,10 @@ from io import BytesIO
 from pathlib import Path
 
 from app.detectors.file_detector import analyze_file
+from app.detectors.qr_detector import (
+    IMAGE_EXTENSIONS,
+    inspect_qr,
+)
 from app.parsers.email_parser import parse_email
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -24,7 +28,7 @@ TEXT_EXTENSIONS = {
     ".htm",
     ".svg",
 }
-SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | {
+SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | IMAGE_EXTENSIONS | {
     ".eml",
     ".pdf",
     ".docx",
@@ -32,7 +36,13 @@ SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | {
     ".xlsx",
     ".zip",
 }
-BINARY_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".zip"}
+BINARY_EXTENSIONS = {
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".zip",
+} | IMAGE_EXTENSIONS
 
 
 class FileReaderError(ValueError):
@@ -107,6 +117,25 @@ def _inspect_zip(data: bytes) -> list[zipfile.ZipInfo]:
 def _detect_type(data: bytes) -> str:
     if data.startswith(b"%PDF-"):
         return ".pdf"
+
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+
+    if data.startswith(b"BM"):
+        return ".bmp"
+
+    if (
+        len(data) >= 12
+        and data[:4] == b"RIFF"
+        and data[8:12] == b"WEBP"
+    ):
+        return ".webp"
 
     if zipfile.is_zipfile(
         BytesIO(data)
@@ -313,17 +342,17 @@ def read_uploaded_file(
         data
     )
 
-    file_analysis = analyze_file(
-        safe_name,
+    equivalent_types = {
+        ".jpeg": ".jpg",
+    }
+    expected_detected = equivalent_types.get(
         extension,
-        content_type,
-        detected_type,
-        data,
+        extension,
     )
 
     if (
         extension in BINARY_EXTENSIONS
-        and detected_type != extension
+        and detected_type != expected_detected
     ):
         raise FileReaderError(
             "The file content does not "
@@ -342,6 +371,25 @@ def read_uploaded_file(
             415,
         )
 
+    file_analysis = analyze_file(
+        safe_name,
+        extension,
+        content_type,
+        detected_type,
+        data,
+    )
+    qr_analysis = inspect_qr(
+        data,
+        extension,
+    )
+    file_analysis["qr"] = qr_analysis
+    file_analysis["urls"] = list(
+        dict.fromkeys(
+            file_analysis.get("urls", [])
+            + qr_analysis.get("urls", [])
+        )
+    )
+
     readers = {
         ".pdf": _read_pdf,
         ".docx": _read_docx,
@@ -356,6 +404,15 @@ def read_uploaded_file(
         if extension in TEXT_EXTENSIONS:
             text = _decode_text(data)
             parser = "text"
+
+        elif extension in IMAGE_EXTENSIONS:
+            text = "\n".join(
+                item["payload"]
+                for item in qr_analysis[
+                    "payloads"
+                ]
+            )
+            parser = "image"
 
         elif extension == ".eml":
             email_result = parse_email(

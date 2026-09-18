@@ -3,9 +3,13 @@ from urllib.parse import urlparse
 
 
 def extract_indicators(content: str):
-    urls = re.findall(
-        r"https?://[^\s<>\"']+",
-        content,
+    urls = list(
+        dict.fromkeys(
+            re.findall(
+                r"https?://[^\s<>\"']+",
+                content,
+            )
+        )
     )
 
     emails = re.findall(

@@ -123,19 +123,6 @@ button:disabled {
 .warning-text {
   color: #f59e0b;
 }
-.error {
-  color: #ef4444;
-  margin-bottom: 0;
-}
-
-.warning-text {
-  color: #f59e0b;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 .challenge-button {
   margin-top: 18px;
@@ -714,4 +701,10 @@ button:disabled {
   .finding-topline {
     align-items: flex-start;
   }
+}
+
+
+.qr-source {
+  color: #73818d;
+  font-size: 10px;
 }

@@ -36,3 +36,7 @@ pypdf>=6,<7
 python-docx>=1.1,<2
 python-pptx>=1.0,<2
 openpyxl>=3.1,<4
+
+# V2 QR and advanced URL analysis
+tldextract>=5.1,<6
+opencv-python-headless>=4.11,<5

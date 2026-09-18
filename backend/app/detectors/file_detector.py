@@ -29,6 +29,12 @@ MIME = {
     ".htm": {"text/html", "text/plain"},
     ".svg": {"image/svg+xml", "text/xml", "application/xml", "text/plain"},
     ".zip": {"application/zip", "application/x-zip-compressed"},
+    ".png": {"image/png"},
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
+    ".gif": {"image/gif"},
+    ".bmp": {"image/bmp"},
+    ".webp": {"image/webp"},
 }
 SEVERITY = {"Info": 0, "Low": 1, "Medium": 2, "High": 3}
 

@@ -82,6 +82,10 @@ Additional rules:
 - A Reply-To or Return-Path mismatch is an indicator that requires context; it is not by itself proof of spoofing or malicious intent.
 - Static file findings describe directly observed structure or indicators. Active content, embedded objects, external relationships, forms, scripts, redirects, or obfuscation primitives are not by themselves proof of malware.
 - Never claim an uploaded file was executed. Static analysis only is performed.
+- A decoded QR payload is evidence of what the QR contains, not proof that the destination is malicious.
+- Redirect timeout, connectivity failure, or lack of a redirect is not benign or malicious evidence by itself.
+- A redirect blocked by the SSRF guard means the target was not contacted because it resolved to a non-public or prohibited address; do not invent what exists at that address.
+- Punycode, unusual ports, deep subdomains, encoded characters, and typosquat-style patterns are indicators that require context, not confirmed maliciousness.
 
 Return exactly this structure:
 
@@ -301,6 +305,8 @@ Rules:
 - Routing geography describes mail infrastructure, not the sender person's physical location.
 - Header-reported SPF, DKIM, and DMARC values are not independent verification unless explicitly marked as verified.
 - Static file indicators do not prove malware or compromise, and the uploaded artifact was not executed.
+- QR payloads and URL heuristics are indicators only unless other supplied evidence establishes maliciousness.
+- Redirect errors or timeouts do not prove safety or maliciousness.
 - If no meaningful counter-evidence exists, say so.
 - A revised confidence must be between 0 and 100.
 - The revised verdict must be one of:

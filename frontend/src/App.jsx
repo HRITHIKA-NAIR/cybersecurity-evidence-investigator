@@ -1,4 +1,6 @@
 import { useState } from "react";
+import EmailIntelligence from "./components/EmailIntelligence";
+import FileIntelligence from "./components/FileIntelligence";
 import "./App.css";
 
 const API_URL =
@@ -6,7 +8,7 @@ const API_URL =
   "http://127.0.0.1:8001";
 
 const SUPPORTED_FILES =
-  ".txt,.md,.csv,.json,.eml,.pdf,.docx,.pptx,.xlsx,.html,.htm,.svg,.zip";
+  ".txt,.md,.csv,.json,.eml,.pdf,.docx,.pptx,.xlsx,.html,.htm,.svg,.zip,.png,.jpg,.jpeg,.gif,.bmp,.webp";
 
 async function requestJson(url, options) {
   const response = await fetch(url, options);
@@ -297,7 +299,8 @@ function App() {
 
             <span className="upload-formats">
               PDF · DOCX · PPTX · XLSX · EML · ZIP ·
-              HTML/SVG · TXT/MD/CSV/JSON · max 10 MB
+              HTML/SVG · PNG/JPG/WEBP/GIF/BMP ·
+              TXT/MD/CSV/JSON · max 10 MB
             </span>
 
             <input
@@ -449,349 +452,14 @@ function App() {
           </div>
         </section>
 
-        {result?.file_info && (
-          <section className="panel file-panel">
-            <div className="file-heading">
-              <div>
-                <h2>File Intelligence</h2>
-                <p className="file-note">
-                  Static inspection only. The uploaded artifact
-                  was not executed.
-                </p>
-              </div>
+        <FileIntelligence
+          fileInfo={result?.file_info}
+          analysis={result?.file_analysis}
+        />
 
-              <span className="analysis-badge">
-                STATIC ONLY
-              </span>
-            </div>
-
-            <div className="file-grid">
-              <div className="file-field">
-                <span>Filename</span>
-                <strong>
-                  {result.file_info.filename}
-                </strong>
-              </div>
-
-              <div className="file-field">
-                <span>Detected Type</span>
-                <strong>
-                  {result.file_info.detected_type}
-                </strong>
-              </div>
-
-              <div className="file-field">
-                <span>Declared MIME</span>
-                <strong>
-                  {result.file_info.declared_mime ||
-                    "Not provided"}
-                </strong>
-              </div>
-
-              <div className="file-field">
-                <span>Size</span>
-                <strong>
-                  {result.file_info.size_bytes.toLocaleString()} bytes
-                </strong>
-              </div>
-            </div>
-
-            <div className="file-hash">
-              <span>SHA-256</span>
-              <code>{result.file_info.sha256}</code>
-            </div>
-
-            <div className="file-findings">
-              <h3>
-                Static Findings{" "}
-                <span className="finding-count">
-                  {result.file_analysis?.finding_count || 0}
-                </span>
-              </h3>
-
-              {result.file_analysis?.findings?.length >
-              0 ? (
-                <div className="finding-list">
-                  {result.file_analysis.findings.map(
-                    (finding, index) => (
-                      <article
-                        className="finding-card"
-                        key={index}
-                      >
-                        <div className="finding-topline">
-                          <strong>
-                            {finding.attack_type}
-                          </strong>
-
-                          <span
-                            className={`severity severity-${finding.severity.toLowerCase()}`}
-                          >
-                            {finding.severity}
-                          </span>
-                        </div>
-
-                        <div className="finding-meta">
-                          {finding.category} ·{" "}
-                          {finding.status} ·{" "}
-                          {finding.confidence}% confidence
-                        </div>
-
-                        <ul>
-                          {finding.evidence.map(
-                            (item, evidenceIndex) => (
-                              <li key={evidenceIndex}>
-                                {item}
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      </article>
-                    )
-                  )}
-                </div>
-              ) : (
-                <p className="file-clear">
-                  No static warning indicators were detected
-                  by the checks run. This does not prove the
-                  file is safe.
-                </p>
-              )}
-            </div>
-
-            {result.file_analysis?.urls?.length > 0 && (
-              <div className="file-urls">
-                <h3>URLs Found in File Structure</h3>
-                <ul>
-                  {result.file_analysis.urls.map(
-                    (url, index) => (
-                      <li key={index}>
-                        <code>{url}</code>
-                      </li>
-                    )
-                  )}
-                </ul>
-              </div>
-            )}
-          </section>
-        )}
-
-        {result?.email_analysis && (
-          <section className="panel email-panel">
-            <div className="email-heading">
-              <div>
-                <h2>Email Intelligence</h2>
-                <p className="email-note">
-                  Header-derived evidence only. Claimed identity
-                  is not verified, and routing geography describes
-                  mail infrastructure rather than a person's
-                  physical location.
-                </p>
-              </div>
-            </div>
-
-            <div className="email-grid">
-              <div className="email-field">
-                <span>Claimed Sender</span>
-                <strong>
-                  {result.email_analysis
-                    .claimed_sender_name ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Sender Address</span>
-                <strong>
-                  {result.email_analysis
-                    .sender_address ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Sender Domain</span>
-                <strong>
-                  {result.email_analysis
-                    .sender_domain ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Reply-To</span>
-                <strong>
-                  {result.email_analysis.reply_to ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Return-Path</span>
-                <strong>
-                  {result.email_analysis
-                    .return_path ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Subject</span>
-                <strong>
-                  {result.email_analysis.subject ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Message-ID</span>
-                <strong>
-                  {result.email_analysis
-                    .message_id ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Claimed Send Time</span>
-                <strong>
-                  {result.email_analysis
-                    .claimed_send_time ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Earliest Received Time</span>
-                <strong>
-                  {result.email_analysis
-                    .earliest_received_time ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Originating Routing IP</span>
-                <strong>
-                  {result.email_analysis
-                    .originating_ip ||
-                    "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Likely Routing Country</span>
-                <strong>
-                  {result.email_analysis
-                    .routing_intelligence
-                    ?.status === "success"
-                    ? result.email_analysis
-                        .routing_intelligence
-                        .country ||
-                      "Not available"
-                    : "Not available"}
-                </strong>
-              </div>
-
-              <div className="email-field">
-                <span>Network / ASN</span>
-                <strong>
-                  {result.email_analysis
-                    .routing_intelligence
-                    ?.status === "success"
-                    ? [
-                        result.email_analysis
-                          .routing_intelligence
-                          .as_owner,
-                        result.email_analysis
-                          .routing_intelligence
-                          .asn
-                          ? `AS${result.email_analysis
-                              .routing_intelligence
-                              .asn}`
-                          : null,
-                        result.email_analysis
-                          .routing_intelligence
-                          .network,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") ||
-                      "Not available"
-                    : "Not available"}
-                </strong>
-              </div>
-            </div>
-
-            <div className="email-auth">
-              <span>
-                SPF:{" "}
-                <strong>
-                  {result.email_analysis
-                    .authentication?.spf ||
-                    "not_reported"}
-                </strong>
-              </span>
-              <span>
-                DKIM:{" "}
-                <strong>
-                  {result.email_analysis
-                    .authentication?.dkim ||
-                    "not_reported"}
-                </strong>
-              </span>
-              <span>
-                DMARC:{" "}
-                <strong>
-                  {result.email_analysis
-                    .authentication?.dmarc ||
-                    "not_reported"}
-                </strong>
-              </span>
-            </div>
-
-            <p className="email-auth-note">
-              SPF, DKIM, and DMARC values above are
-              reported by the uploaded message headers;
-              they are not independently re-verified yet.
-            </p>
-
-            {result.email_analysis.warnings?.length >
-              0 && (
-              <div className="email-warnings">
-                <h3>Header Indicators</h3>
-                <ul>
-                  {result.email_analysis
-                    .warnings.map(
-                      (warning, index) => (
-                        <li key={index}>
-                          {warning}
-                        </li>
-                      )
-                    )}
-                </ul>
-              </div>
-            )}
-
-            {result.email_analysis.attachments?.length >
-              0 && (
-              <div className="email-warnings">
-                <h3>Attachments</h3>
-                <ul>
-                  {result.email_analysis
-                    .attachments.map(
-                      (attachment, index) => (
-                        <li key={index}>
-                          {attachment.filename ||
-                            "Unnamed attachment"}{" "}
-                          · {attachment.content_type} ·{" "}
-                          {attachment.size_bytes} bytes
-                        </li>
-                      )
-                    )}
-                </ul>
-              </div>
-            )}
-          </section>
-        )}
+        <EmailIntelligence
+          analysis={result?.email_analysis}
+        />
 
         <section className="panel">
           <h2>Evidence</h2>
