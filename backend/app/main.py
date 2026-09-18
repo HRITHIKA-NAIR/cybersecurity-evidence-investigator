@@ -20,7 +20,7 @@ from app.parsers.file_reader import (
 from app.tools.ai_analysis import analyze_evidence, challenge_assessment
 from app.tools.indicators import extract_indicators
 from app.tools.url_analysis import analyze_url
-from app.tools.virustotal import check_domain
+from app.tools.virustotal import check_domain, check_ip
 
 app = FastAPI(title="Cybersecurity Evidence Investigator")
 init_db()
@@ -51,7 +51,11 @@ class ChallengeRequest(BaseModel):
     investigation_id: int
 
 
-def _run_investigation(content: str, file_info: dict | None = None):
+def _run_investigation(
+    content: str,
+    file_info: dict | None = None,
+    email_analysis: dict | None = None,
+):
     indicators = extract_indicators(content)
 
     url_results = [
@@ -63,6 +67,17 @@ def _run_investigation(content: str, file_info: dict | None = None):
         check_domain(domain)
         for domain in indicators["domains"]
     ]
+
+    if email_analysis:
+        email_analysis = dict(email_analysis)
+        originating_ip = email_analysis.get(
+            "originating_ip"
+        )
+
+        if originating_ip:
+            email_analysis[
+                "routing_intelligence"
+            ] = check_ip(originating_ip)
 
     evidence = [
         f"Extracted {len(indicators['urls'])} URL(s)",
@@ -91,6 +106,69 @@ def _run_investigation(content: str, file_info: dict | None = None):
         for finding in result["findings"]:
             evidence.append(finding["message"])
 
+    if email_analysis:
+        claimed_sender = email_analysis.get(
+            "sender_address"
+        )
+        if claimed_sender:
+            evidence.append(
+                f"Claimed sender address: {claimed_sender}"
+            )
+
+        originating_ip = email_analysis.get(
+            "originating_ip"
+        )
+        if originating_ip:
+            evidence.append(
+                f"Earliest usable public routing IP: {originating_ip}"
+            )
+
+        routing = email_analysis.get(
+            "routing_intelligence",
+            {},
+        )
+        if routing.get("status") == "success":
+            if routing.get("country"):
+                evidence.append(
+                    "Likely routing country: "
+                    f"{routing['country']}"
+                )
+            if routing.get("as_owner"):
+                evidence.append(
+                    "Routing network owner: "
+                    f"{routing['as_owner']}"
+                )
+
+        authentication = email_analysis.get(
+            "authentication",
+            {},
+        )
+        for mechanism in (
+            "spf",
+            "dkim",
+            "dmarc",
+        ):
+            status = authentication.get(
+                mechanism
+            )
+            if (
+                status
+                and status != "not_reported"
+            ):
+                evidence.append(
+                    "Header-reported "
+                    f"{mechanism.upper()}: "
+                    f"{status}"
+                )
+
+        for warning in email_analysis.get(
+            "warnings",
+            [],
+        ):
+            evidence.append(
+                f"Email header indicator: {warning}"
+            )
+
     for result in domain_results:
         if result["status"] == "success":
             evidence.append(
@@ -110,6 +188,7 @@ def _run_investigation(content: str, file_info: dict | None = None):
         indicators,
         url_results,
         domain_results,
+        email_analysis,
     )
 
     investigation_id = save_investigation(
@@ -118,12 +197,14 @@ def _run_investigation(content: str, file_info: dict | None = None):
         url_results,
         domain_results,
         ai_result,
+        email_analysis=email_analysis,
     )
 
     return {
         "status": "completed",
         "investigation_id": investigation_id,
         "file_info": file_info,
+        "email_analysis": email_analysis,
         "indicators": indicators,
         "url_analysis": url_results,
         "threat_intelligence": domain_results,
@@ -180,6 +261,7 @@ async def investigate_file(file: UploadFile = File(...)):
         _run_investigation,
         parsed["content"],
         parsed["file_info"],
+        parsed.get("email_analysis"),
     )
 
 
@@ -206,6 +288,7 @@ def challenge(request: ChallengeRequest):
         investigation["url_analysis"],
         investigation["threat_intelligence"],
         original_assessment,
+        investigation.get("email_analysis"),
     )
 
     save_challenge(request.investigation_id, result)

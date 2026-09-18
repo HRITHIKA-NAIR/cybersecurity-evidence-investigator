@@ -447,6 +447,224 @@ function App() {
           </div>
         </section>
 
+        {result?.email_analysis && (
+          <section className="panel email-panel">
+            <div className="email-heading">
+              <div>
+                <h2>Email Intelligence</h2>
+                <p className="email-note">
+                  Header-derived evidence only. Claimed identity
+                  is not verified, and routing geography describes
+                  mail infrastructure rather than a person's
+                  physical location.
+                </p>
+              </div>
+            </div>
+
+            <div className="email-grid">
+              <div className="email-field">
+                <span>Claimed Sender</span>
+                <strong>
+                  {result.email_analysis
+                    .claimed_sender_name ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Sender Address</span>
+                <strong>
+                  {result.email_analysis
+                    .sender_address ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Sender Domain</span>
+                <strong>
+                  {result.email_analysis
+                    .sender_domain ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Reply-To</span>
+                <strong>
+                  {result.email_analysis.reply_to ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Return-Path</span>
+                <strong>
+                  {result.email_analysis
+                    .return_path ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Subject</span>
+                <strong>
+                  {result.email_analysis.subject ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Message-ID</span>
+                <strong>
+                  {result.email_analysis
+                    .message_id ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Claimed Send Time</span>
+                <strong>
+                  {result.email_analysis
+                    .claimed_send_time ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Earliest Received Time</span>
+                <strong>
+                  {result.email_analysis
+                    .earliest_received_time ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Originating Routing IP</span>
+                <strong>
+                  {result.email_analysis
+                    .originating_ip ||
+                    "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Likely Routing Country</span>
+                <strong>
+                  {result.email_analysis
+                    .routing_intelligence
+                    ?.status === "success"
+                    ? result.email_analysis
+                        .routing_intelligence
+                        .country ||
+                      "Not available"
+                    : "Not available"}
+                </strong>
+              </div>
+
+              <div className="email-field">
+                <span>Network / ASN</span>
+                <strong>
+                  {result.email_analysis
+                    .routing_intelligence
+                    ?.status === "success"
+                    ? [
+                        result.email_analysis
+                          .routing_intelligence
+                          .as_owner,
+                        result.email_analysis
+                          .routing_intelligence
+                          .asn
+                          ? `AS${result.email_analysis
+                              .routing_intelligence
+                              .asn}`
+                          : null,
+                        result.email_analysis
+                          .routing_intelligence
+                          .network,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") ||
+                      "Not available"
+                    : "Not available"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="email-auth">
+              <span>
+                SPF:{" "}
+                <strong>
+                  {result.email_analysis
+                    .authentication?.spf ||
+                    "not_reported"}
+                </strong>
+              </span>
+              <span>
+                DKIM:{" "}
+                <strong>
+                  {result.email_analysis
+                    .authentication?.dkim ||
+                    "not_reported"}
+                </strong>
+              </span>
+              <span>
+                DMARC:{" "}
+                <strong>
+                  {result.email_analysis
+                    .authentication?.dmarc ||
+                    "not_reported"}
+                </strong>
+              </span>
+            </div>
+
+            <p className="email-auth-note">
+              SPF, DKIM, and DMARC values above are
+              reported by the uploaded message headers;
+              they are not independently re-verified yet.
+            </p>
+
+            {result.email_analysis.warnings?.length >
+              0 && (
+              <div className="email-warnings">
+                <h3>Header Indicators</h3>
+                <ul>
+                  {result.email_analysis
+                    .warnings.map(
+                      (warning, index) => (
+                        <li key={index}>
+                          {warning}
+                        </li>
+                      )
+                    )}
+                </ul>
+              </div>
+            )}
+
+            {result.email_analysis.attachments?.length >
+              0 && (
+              <div className="email-warnings">
+                <h3>Attachments</h3>
+                <ul>
+                  {result.email_analysis
+                    .attachments.map(
+                      (attachment, index) => (
+                        <li key={index}>
+                          {attachment.filename ||
+                            "Unnamed attachment"}{" "}
+                          · {attachment.content_type} ·{" "}
+                          {attachment.size_bytes} bytes
+                        </li>
+                      )
+                    )}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="panel">
           <h2>Evidence</h2>
 

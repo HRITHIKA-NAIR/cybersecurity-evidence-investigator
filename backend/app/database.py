@@ -22,6 +22,13 @@ def _deserialize(row):
         investigation["threat_intelligence"]
     )
 
+    if investigation.get("email_analysis"):
+        investigation["email_analysis"] = json.loads(
+            investigation["email_analysis"]
+        )
+    else:
+        investigation["email_analysis"] = None
+
     if investigation["challenge_result"]:
         investigation["challenge_result"] = json.loads(
             investigation["challenge_result"]
@@ -43,6 +50,7 @@ def init_db():
                 indicators TEXT NOT NULL,
                 url_analysis TEXT NOT NULL,
                 threat_intelligence TEXT NOT NULL,
+                email_analysis TEXT,
                 threat_score INTEGER NOT NULL,
                 verdict TEXT NOT NULL,
                 confidence INTEGER NOT NULL,
@@ -54,6 +62,19 @@ def init_db():
             """
         )
 
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(investigations)"
+            )
+        }
+
+        if "email_analysis" not in columns:
+            connection.execute(
+                "ALTER TABLE investigations "
+                "ADD COLUMN email_analysis TEXT"
+            )
+
 
 def save_investigation(
     content,
@@ -61,6 +82,7 @@ def save_investigation(
     url_analysis,
     threat_intelligence,
     ai_result,
+    email_analysis=None,
 ):
     with get_connection() as connection:
         cursor = connection.execute(
@@ -70,19 +92,25 @@ def save_investigation(
                 indicators,
                 url_analysis,
                 threat_intelligence,
+                email_analysis,
                 threat_score,
                 verdict,
                 confidence,
                 reasoning,
                 insufficient_evidence
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 content,
                 json.dumps(indicators),
                 json.dumps(url_analysis),
                 json.dumps(threat_intelligence),
+                (
+                    json.dumps(email_analysis)
+                    if email_analysis is not None
+                    else None
+                ),
                 ai_result["threat_score"],
                 ai_result["verdict"],
                 ai_result["confidence"],

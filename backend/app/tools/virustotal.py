@@ -9,60 +9,173 @@ API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
 BASE_URL = "https://www.virustotal.com/api/v3"
 
 
-def check_domain(domain: str):
+def _lookup(resource: str, value: str, key: str):
+    base = {
+        key: value,
+    }
+
     if not API_KEY:
-        return {
-            "domain": domain,
+        return None, {
+            **base,
             "status": "unavailable",
-            "message": "VirusTotal API key is not configured",
+            "message": (
+                "VirusTotal API key "
+                "is not configured"
+            ),
         }
 
     try:
         response = httpx.get(
-            f"{BASE_URL}/domains/{domain}",
-            headers={"x-apikey": API_KEY},
+            f"{BASE_URL}/{resource}/{value}",
+            headers={
+                "x-apikey": API_KEY,
+            },
             timeout=10,
         )
 
         if response.status_code == 404:
-            return {
-                "domain": domain,
+            return None, {
+                **base,
                 "status": "unknown",
-                "message": "Domain not found in VirusTotal",
+                "message": (
+                    "Indicator not found "
+                    "in VirusTotal"
+                ),
             }
 
         if response.status_code == 429:
-            return {
-                "domain": domain,
+            return None, {
+                **base,
                 "status": "rate_limited",
-                "message": "VirusTotal rate limit reached",
+                "message": (
+                    "VirusTotal rate "
+                    "limit reached"
+                ),
             }
 
         response.raise_for_status()
 
-        data = response.json()["data"]["attributes"]
-        stats = data.get("last_analysis_stats", {})
-
-        return {
-            "domain": domain,
-            "status": "success",
-            "malicious": stats.get("malicious", 0),
-            "suspicious": stats.get("suspicious", 0),
-            "harmless": stats.get("harmless", 0),
-            "undetected": stats.get("undetected", 0),
-            "reputation": data.get("reputation", 0),
-        }
+        return (
+            response.json()[
+                "data"
+            ]["attributes"],
+            None,
+        )
 
     except httpx.RequestError:
-        return {
-            "domain": domain,
+        return None, {
+            **base,
             "status": "error",
-            "message": "Could not connect to VirusTotal",
+            "message": (
+                "Could not connect "
+                "to VirusTotal"
+            ),
         }
 
-    except httpx.HTTPStatusError:
-        return {
-            "domain": domain,
+    except (
+        httpx.HTTPStatusError,
+        KeyError,
+        TypeError,
+    ):
+        return None, {
+            **base,
             "status": "error",
-            "message": "VirusTotal returned an error",
+            "message": (
+                "VirusTotal returned "
+                "an error"
+            ),
         }
+
+
+def check_domain(domain: str):
+    data, error = _lookup(
+        "domains",
+        domain,
+        "domain",
+    )
+
+    if error:
+        return error
+
+    stats = data.get(
+        "last_analysis_stats",
+        {},
+    )
+
+    return {
+        "domain": domain,
+        "status": "success",
+        "malicious": stats.get(
+            "malicious",
+            0,
+        ),
+        "suspicious": stats.get(
+            "suspicious",
+            0,
+        ),
+        "harmless": stats.get(
+            "harmless",
+            0,
+        ),
+        "undetected": stats.get(
+            "undetected",
+            0,
+        ),
+        "reputation": data.get(
+            "reputation",
+            0,
+        ),
+    }
+
+
+def check_ip(ip_address: str):
+    data, error = _lookup(
+        "ip_addresses",
+        ip_address,
+        "ip",
+    )
+
+    if error:
+        return error
+
+    stats = data.get(
+        "last_analysis_stats",
+        {},
+    )
+
+    return {
+        "ip": ip_address,
+        "status": "success",
+        "country": data.get(
+            "country"
+        ),
+        "asn": data.get(
+            "asn"
+        ),
+        "as_owner": data.get(
+            "as_owner"
+        ),
+        "network": data.get(
+            "network"
+        ),
+        "malicious": stats.get(
+            "malicious",
+            0,
+        ),
+        "suspicious": stats.get(
+            "suspicious",
+            0,
+        ),
+        "harmless": stats.get(
+            "harmless",
+            0,
+        ),
+        "undetected": stats.get(
+            "undetected",
+            0,
+        ),
+        "reputation": data.get(
+            "reputation",
+            0,
+        ),
+    }

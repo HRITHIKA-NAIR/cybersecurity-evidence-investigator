@@ -17,6 +17,7 @@ def analyze_evidence(
     indicators,
     url_analysis,
     threat_intelligence,
+    email_analysis=None,
 ):
     if not client:
         return {
@@ -33,6 +34,7 @@ def analyze_evidence(
         "indicators": indicators,
         "url_analysis": url_analysis,
         "threat_intelligence": threat_intelligence,
+        "email_analysis": email_analysis,
     }
 
     prompt = f"""
@@ -72,6 +74,10 @@ Additional rules:
 - Zero malicious or suspicious detections alone does not prove safety.
 - When VirusTotal reports harmless classifications, zero malicious detections, zero suspicious detections, and no other suspicious findings are present, Low Risk is permitted.
 - Confidence represents the strength of evidence supporting the risk assessment, not confidence in being uncertain.
+- A From display name is only a claimed sender identity; do not treat it as verified identity.
+- A routing IP, country, ASN, or network identifies observed mail infrastructure and must not be presented as the sender person's physical location.
+- SPF, DKIM, and DMARC values parsed from uploaded message headers are header-reported evidence, not independent verification unless the evidence explicitly says they were verified.
+- A Reply-To or Return-Path mismatch is an indicator that requires context; it is not by itself proof of spoofing or malicious intent.
 
 Return exactly this structure:
 
@@ -140,10 +146,26 @@ Evidence:
             and not indicators.get("emails")
         )
 
+        email_security_evidence = bool(
+            email_analysis
+            and (
+                email_analysis.get("warnings")
+                or email_analysis.get("originating_ip")
+                or any(
+                    email_analysis.get(
+                        "authentication",
+                        {},
+                    ).get(name) != "not_reported"
+                    for name in ("spf", "dkim", "dmarc")
+                )
+            )
+        )
+
         no_security_evidence = (
             no_indicators
             and not url_analysis
             and not threat_intelligence
+            and not email_security_evidence
         )
 
         if (
@@ -221,6 +243,7 @@ def challenge_assessment(
     url_analysis,
     threat_intelligence,
     original_assessment,
+    email_analysis=None,
 ):
     if not client:
         return {
@@ -237,6 +260,7 @@ def challenge_assessment(
         "indicators": indicators,
         "url_analysis": url_analysis,
         "threat_intelligence": threat_intelligence,
+        "email_analysis": email_analysis,
         "original_assessment": original_assessment,
     }
 
@@ -261,6 +285,9 @@ Rules:
 - Zero VirusTotal detections does not prove safety.
 - Undetected does not mean harmless.
 - HTTPS does not prove legitimacy.
+- A claimed sender name is not verified identity.
+- Routing geography describes mail infrastructure, not the sender person's physical location.
+- Header-reported SPF, DKIM, and DMARC values are not independent verification unless explicitly marked as verified.
 - If no meaningful counter-evidence exists, say so.
 - A revised confidence must be between 0 and 100.
 - The revised verdict must be one of:
