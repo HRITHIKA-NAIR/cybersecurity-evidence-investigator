@@ -22,12 +22,13 @@ def _deserialize(row):
         investigation["threat_intelligence"]
     )
 
-    if investigation.get("email_analysis"):
-        investigation["email_analysis"] = json.loads(
-            investigation["email_analysis"]
-        )
-    else:
-        investigation["email_analysis"] = None
+    for field in ("email_analysis", "file_analysis"):
+        if investigation.get(field):
+            investigation[field] = json.loads(
+                investigation[field]
+            )
+        else:
+            investigation[field] = None
 
     if investigation["challenge_result"]:
         investigation["challenge_result"] = json.loads(
@@ -51,6 +52,7 @@ def init_db():
                 url_analysis TEXT NOT NULL,
                 threat_intelligence TEXT NOT NULL,
                 email_analysis TEXT,
+                file_analysis TEXT,
                 threat_score INTEGER NOT NULL,
                 verdict TEXT NOT NULL,
                 confidence INTEGER NOT NULL,
@@ -69,11 +71,15 @@ def init_db():
             )
         }
 
-        if "email_analysis" not in columns:
-            connection.execute(
-                "ALTER TABLE investigations "
-                "ADD COLUMN email_analysis TEXT"
-            )
+        for column in (
+            "email_analysis",
+            "file_analysis",
+        ):
+            if column not in columns:
+                connection.execute(
+                    "ALTER TABLE investigations "
+                    f"ADD COLUMN {column} TEXT"
+                )
 
 
 def save_investigation(
@@ -83,6 +89,7 @@ def save_investigation(
     threat_intelligence,
     ai_result,
     email_analysis=None,
+    file_analysis=None,
 ):
     with get_connection() as connection:
         cursor = connection.execute(
@@ -93,13 +100,14 @@ def save_investigation(
                 url_analysis,
                 threat_intelligence,
                 email_analysis,
+                file_analysis,
                 threat_score,
                 verdict,
                 confidence,
                 reasoning,
                 insufficient_evidence
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 content,
@@ -109,6 +117,11 @@ def save_investigation(
                 (
                     json.dumps(email_analysis)
                     if email_analysis is not None
+                    else None
+                ),
+                (
+                    json.dumps(file_analysis)
+                    if file_analysis is not None
                     else None
                 ),
                 ai_result["threat_score"],

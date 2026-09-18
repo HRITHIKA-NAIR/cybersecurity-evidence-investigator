@@ -18,6 +18,7 @@ def analyze_evidence(
     url_analysis,
     threat_intelligence,
     email_analysis=None,
+    file_analysis=None,
 ):
     if not client:
         return {
@@ -35,6 +36,7 @@ def analyze_evidence(
         "url_analysis": url_analysis,
         "threat_intelligence": threat_intelligence,
         "email_analysis": email_analysis,
+        "file_analysis": file_analysis,
     }
 
     prompt = f"""
@@ -78,6 +80,8 @@ Additional rules:
 - A routing IP, country, ASN, or network identifies observed mail infrastructure and must not be presented as the sender person's physical location.
 - SPF, DKIM, and DMARC values parsed from uploaded message headers are header-reported evidence, not independent verification unless the evidence explicitly says they were verified.
 - A Reply-To or Return-Path mismatch is an indicator that requires context; it is not by itself proof of spoofing or malicious intent.
+- Static file findings describe directly observed structure or indicators. Active content, embedded objects, external relationships, forms, scripts, redirects, or obfuscation primitives are not by themselves proof of malware.
+- Never claim an uploaded file was executed. Static analysis only is performed.
 
 Return exactly this structure:
 
@@ -161,11 +165,17 @@ Evidence:
             )
         )
 
+        file_security_evidence = bool(
+            file_analysis
+            and file_analysis.get("findings")
+        )
+
         no_security_evidence = (
             no_indicators
             and not url_analysis
             and not threat_intelligence
             and not email_security_evidence
+            and not file_security_evidence
         )
 
         if (
@@ -244,6 +254,7 @@ def challenge_assessment(
     threat_intelligence,
     original_assessment,
     email_analysis=None,
+    file_analysis=None,
 ):
     if not client:
         return {
@@ -261,6 +272,7 @@ def challenge_assessment(
         "url_analysis": url_analysis,
         "threat_intelligence": threat_intelligence,
         "email_analysis": email_analysis,
+        "file_analysis": file_analysis,
         "original_assessment": original_assessment,
     }
 
@@ -288,6 +300,7 @@ Rules:
 - A claimed sender name is not verified identity.
 - Routing geography describes mail infrastructure, not the sender person's physical location.
 - Header-reported SPF, DKIM, and DMARC values are not independent verification unless explicitly marked as verified.
+- Static file indicators do not prove malware or compromise, and the uploaded artifact was not executed.
 - If no meaningful counter-evidence exists, say so.
 - A revised confidence must be between 0 and 100.
 - The revised verdict must be one of:

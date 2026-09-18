@@ -55,8 +55,19 @@ def _run_investigation(
     content: str,
     file_info: dict | None = None,
     email_analysis: dict | None = None,
+    file_analysis: dict | None = None,
 ):
     indicators = extract_indicators(content)
+
+    if file_analysis and file_analysis.get("urls"):
+        static_indicators = extract_indicators(
+            "\n".join(file_analysis["urls"])
+        )
+
+        for key in ("urls", "domains", "emails"):
+            for item in static_indicators[key]:
+                if item not in indicators[key]:
+                    indicators[key].append(item)
 
     url_results = [
         analyze_url(url)
@@ -100,6 +111,20 @@ def _run_investigation(
         if file_info["truncated"]:
             evidence.append(
                 "Extracted text was truncated for safe processing."
+            )
+
+    if file_analysis:
+        for finding in file_analysis.get(
+            "findings",
+            [],
+        ):
+            detail = (
+                finding.get("evidence")
+                or [finding["attack_type"]]
+            )[0]
+            evidence.append(
+                "Static file finding: "
+                f"{finding['attack_type']} — {detail}"
             )
 
     for result in url_results:
@@ -189,6 +214,7 @@ def _run_investigation(
         url_results,
         domain_results,
         email_analysis,
+        file_analysis,
     )
 
     investigation_id = save_investigation(
@@ -198,6 +224,7 @@ def _run_investigation(
         domain_results,
         ai_result,
         email_analysis=email_analysis,
+        file_analysis=file_analysis,
     )
 
     return {
@@ -205,6 +232,7 @@ def _run_investigation(
         "investigation_id": investigation_id,
         "file_info": file_info,
         "email_analysis": email_analysis,
+        "file_analysis": file_analysis,
         "indicators": indicators,
         "url_analysis": url_results,
         "threat_intelligence": domain_results,
@@ -262,6 +290,7 @@ async def investigate_file(file: UploadFile = File(...)):
         parsed["content"],
         parsed["file_info"],
         parsed.get("email_analysis"),
+        parsed.get("file_analysis"),
     )
 
 
@@ -289,6 +318,7 @@ def challenge(request: ChallengeRequest):
         investigation["threat_intelligence"],
         original_assessment,
         investigation.get("email_analysis"),
+        investigation.get("file_analysis"),
     )
 
     save_challenge(request.investigation_id, result)

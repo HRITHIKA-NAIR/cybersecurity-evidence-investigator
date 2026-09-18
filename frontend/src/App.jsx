@@ -323,10 +323,11 @@ function App() {
           />
 
           <p className="processing-notice">
-            Submitted domains and public routing IPs may be
+            Extracted domains and public routing IPs may be
             checked with VirusTotal, and extracted content may
-            be processed by Gemini. Avoid submitting sensitive
-            or confidential information.
+            be processed by Gemini. Raw uploaded files are not
+            sent to VirusTotal by this workflow. Avoid submitting
+            sensitive or confidential information.
           </p>
 
           {error && <p className="error">{error}</p>}
@@ -447,6 +448,132 @@ function App() {
             )}
           </div>
         </section>
+
+        {result?.file_info && (
+          <section className="panel file-panel">
+            <div className="file-heading">
+              <div>
+                <h2>File Intelligence</h2>
+                <p className="file-note">
+                  Static inspection only. The uploaded artifact
+                  was not executed.
+                </p>
+              </div>
+
+              <span className="analysis-badge">
+                STATIC ONLY
+              </span>
+            </div>
+
+            <div className="file-grid">
+              <div className="file-field">
+                <span>Filename</span>
+                <strong>
+                  {result.file_info.filename}
+                </strong>
+              </div>
+
+              <div className="file-field">
+                <span>Detected Type</span>
+                <strong>
+                  {result.file_info.detected_type}
+                </strong>
+              </div>
+
+              <div className="file-field">
+                <span>Declared MIME</span>
+                <strong>
+                  {result.file_info.declared_mime ||
+                    "Not provided"}
+                </strong>
+              </div>
+
+              <div className="file-field">
+                <span>Size</span>
+                <strong>
+                  {result.file_info.size_bytes.toLocaleString()} bytes
+                </strong>
+              </div>
+            </div>
+
+            <div className="file-hash">
+              <span>SHA-256</span>
+              <code>{result.file_info.sha256}</code>
+            </div>
+
+            <div className="file-findings">
+              <h3>
+                Static Findings{" "}
+                <span className="finding-count">
+                  {result.file_analysis?.finding_count || 0}
+                </span>
+              </h3>
+
+              {result.file_analysis?.findings?.length >
+              0 ? (
+                <div className="finding-list">
+                  {result.file_analysis.findings.map(
+                    (finding, index) => (
+                      <article
+                        className="finding-card"
+                        key={index}
+                      >
+                        <div className="finding-topline">
+                          <strong>
+                            {finding.attack_type}
+                          </strong>
+
+                          <span
+                            className={`severity severity-${finding.severity.toLowerCase()}`}
+                          >
+                            {finding.severity}
+                          </span>
+                        </div>
+
+                        <div className="finding-meta">
+                          {finding.category} ·{" "}
+                          {finding.status} ·{" "}
+                          {finding.confidence}% confidence
+                        </div>
+
+                        <ul>
+                          {finding.evidence.map(
+                            (item, evidenceIndex) => (
+                              <li key={evidenceIndex}>
+                                {item}
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </article>
+                    )
+                  )}
+                </div>
+              ) : (
+                <p className="file-clear">
+                  No static warning indicators were detected
+                  by the checks run. This does not prove the
+                  file is safe.
+                </p>
+              )}
+            </div>
+
+            {result.file_analysis?.urls?.length > 0 && (
+              <div className="file-urls">
+                <h3>URLs Found in File Structure</h3>
+                <ul>
+                  {result.file_analysis.urls.map(
+                    (url, index) => (
+                      <li key={index}>
+                        <code>{url}</code>
+                      </li>
+                    )
+                  )}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
 
         {result?.email_analysis && (
           <section className="panel email-panel">

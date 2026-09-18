@@ -5,6 +5,7 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
+from app.detectors.file_detector import analyze_file
 from app.parsers.email_parser import parse_email
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -312,6 +313,14 @@ def read_uploaded_file(
         data
     )
 
+    file_analysis = analyze_file(
+        safe_name,
+        extension,
+        content_type,
+        detected_type,
+        data,
+    )
+
     if (
         extension in BINARY_EXTENSIONS
         and detected_type != extension
@@ -386,6 +395,7 @@ def read_uploaded_file(
 
     result = {
         "content": content,
+        "file_analysis": file_analysis,
         "file_info": {
             "filename": safe_name,
             "extension": extension,
