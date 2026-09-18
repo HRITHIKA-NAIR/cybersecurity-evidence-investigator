@@ -129,6 +129,23 @@ def _run_investigation(
                 f"{item['payload']}"
             )
 
+        if qr_analysis.get("status") in {
+            "error",
+            "unavailable",
+        }:
+            evidence.append(
+                "QR analysis limitation: "
+                f"{qr_analysis.get('reason', 'unavailable')}"
+            )
+
+        for error in file_analysis.get(
+            "analysis_errors",
+            [],
+        ):
+            evidence.append(
+                f"File analysis limitation: {error}"
+            )
+
         for finding in file_analysis.get(
             "findings",
             [],
