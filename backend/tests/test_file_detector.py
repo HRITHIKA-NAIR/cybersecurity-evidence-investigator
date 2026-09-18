@@ -37,6 +37,43 @@ def test_detects_double_extension():
     )
 
 
+def test_detects_hidden_extension_style_repeat():
+    data = _zip({"note.txt": "hello"})
+
+    result = analyze_file(
+        "invoice.pdf.zip.zip",
+        ".zip",
+        "application/zip",
+        ".zip",
+        data,
+    )
+
+    assert "Double Extension" in _types(
+        result["findings"]
+    )
+
+
+def test_detects_double_extension_inside_archive():
+    data = _zip(
+        {
+            "invoice.pdf.ps1": "Write-Host test",
+        }
+    )
+
+    result = analyze_file(
+        "archive.zip",
+        ".zip",
+        "application/zip",
+        ".zip",
+        data,
+    )
+
+    types = _types(result["findings"])
+
+    assert "Double Extension" in types
+    assert "Executable or Script in Archive" in types
+
+
 def test_detects_bidirectional_unicode_control():
     data = _zip({"note.txt": "hello"})
 
