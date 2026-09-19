@@ -2,7 +2,21 @@ import json
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "investigations.db"
+DB_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "investigations.db"
+)
+JSON_FIELDS = (
+    "indicators",
+    "url_analysis",
+    "threat_intelligence",
+    "email_analysis",
+    "file_analysis",
+    "evidence_items",
+    "attack_findings",
+    "attack_chain",
+    "challenge_result",
+)
 
 
 def get_connection():
@@ -16,27 +30,29 @@ def _deserialize(row):
         return None
 
     investigation = dict(row)
-    investigation["indicators"] = json.loads(investigation["indicators"])
-    investigation["url_analysis"] = json.loads(investigation["url_analysis"])
-    investigation["threat_intelligence"] = json.loads(
-        investigation["threat_intelligence"]
-    )
 
-    for field in ("email_analysis", "file_analysis"):
-        if investigation.get(field):
+    for field in JSON_FIELDS:
+        value = investigation.get(field)
+
+        if value:
             investigation[field] = json.loads(
-                investigation[field]
+                value
             )
-        else:
+        elif field in {
+            "email_analysis",
+            "file_analysis",
+            "challenge_result",
+        }:
             investigation[field] = None
+        else:
+            investigation[field] = []
 
-    if investigation["challenge_result"]:
-        investigation["challenge_result"] = json.loads(
-            investigation["challenge_result"]
-        )
-
-    investigation["insufficient_evidence"] = bool(
-        investigation["insufficient_evidence"]
+    investigation[
+        "insufficient_evidence"
+    ] = bool(
+        investigation[
+            "insufficient_evidence"
+        ]
     )
     return investigation
 
@@ -53,6 +69,9 @@ def init_db():
                 threat_intelligence TEXT NOT NULL,
                 email_analysis TEXT,
                 file_analysis TEXT,
+                evidence_items TEXT,
+                attack_findings TEXT,
+                attack_chain TEXT,
                 threat_score INTEGER NOT NULL,
                 verdict TEXT NOT NULL,
                 confidence INTEGER NOT NULL,
@@ -74,6 +93,9 @@ def init_db():
         for column in (
             "email_analysis",
             "file_analysis",
+            "evidence_items",
+            "attack_findings",
+            "attack_chain",
         ):
             if column not in columns:
                 connection.execute(
@@ -88,8 +110,12 @@ def save_investigation(
     url_analysis,
     threat_intelligence,
     ai_result,
+    *,
     email_analysis=None,
     file_analysis=None,
+    evidence_items=None,
+    attack_findings=None,
+    attack_chain=None,
 ):
     with get_connection() as connection:
         cursor = connection.execute(
@@ -101,40 +127,65 @@ def save_investigation(
                 threat_intelligence,
                 email_analysis,
                 file_analysis,
+                evidence_items,
+                attack_findings,
+                attack_chain,
                 threat_score,
                 verdict,
                 confidence,
                 reasoning,
                 insufficient_evidence
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 content,
                 json.dumps(indicators),
                 json.dumps(url_analysis),
-                json.dumps(threat_intelligence),
+                json.dumps(
+                    threat_intelligence
+                ),
                 (
                     json.dumps(email_analysis)
-                    if email_analysis is not None
+                    if email_analysis
+                    is not None
                     else None
                 ),
                 (
                     json.dumps(file_analysis)
-                    if file_analysis is not None
+                    if file_analysis
+                    is not None
                     else None
                 ),
-                ai_result["threat_score"],
+                json.dumps(
+                    evidence_items or []
+                ),
+                json.dumps(
+                    attack_findings or []
+                ),
+                json.dumps(
+                    attack_chain or []
+                ),
+                ai_result[
+                    "threat_score"
+                ],
                 ai_result["verdict"],
                 ai_result["confidence"],
                 ai_result["reasoning"],
-                int(ai_result["insufficient_evidence"]),
+                int(
+                    ai_result[
+                        "insufficient_evidence"
+                    ]
+                ),
             ),
         )
         return cursor.lastrowid
 
 
-def save_challenge(investigation_id, challenge_result):
+def save_challenge(
+    investigation_id,
+    challenge_result,
+):
     with get_connection() as connection:
         connection.execute(
             """
@@ -143,16 +194,23 @@ def save_challenge(investigation_id, challenge_result):
             WHERE id = ?
             """,
             (
-                json.dumps(challenge_result),
+                json.dumps(
+                    challenge_result
+                ),
                 investigation_id,
             ),
         )
 
 
-def get_investigation(investigation_id):
+def get_investigation(
+    investigation_id,
+):
     with get_connection() as connection:
         row = connection.execute(
-            "SELECT * FROM investigations WHERE id = ?",
+            (
+                "SELECT * FROM "
+                "investigations WHERE id = ?"
+            ),
             (investigation_id,),
         ).fetchone()
 
@@ -171,4 +229,7 @@ def get_investigations(limit=10):
             (limit,),
         ).fetchall()
 
-    return [_deserialize(row) for row in rows]
+    return [
+        _deserialize(row)
+        for row in rows
+    ]
