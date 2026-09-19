@@ -1,15 +1,40 @@
-function HistoryDrawer({ history, onClose }) {
+function formatCreatedAt(value) {
+  if (!value) {
+    return "Unknown time";
+  }
+
+  const hasTimezone =
+    /(?:Z|[+-]\d{2}:\d{2})$/i.test(
+      value
+    );
+  const date = new Date(
+    hasTimezone ? value : value + "Z"
+  );
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString();
+}
+
+function HistoryDrawer({
+  history,
+  onClose,
+  onSelect,
+}) {
   return (
     <>
       <div
         className="history-backdrop"
         onClick={onClose}
-      ></div>
+      />
 
       <aside className="history-sidebar">
         <div className="history-sidebar-header">
           <div className="history-sidebar-title">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
               <path
                 d="M12 8v5l3 2M3.05 11a9 9 0 1 0 2.64-5.36L3 8M3 3v5h5"
                 fill="none"
@@ -19,7 +44,6 @@ function HistoryDrawer({ history, onClose }) {
                 strokeLinejoin="round"
               />
             </svg>
-
             <span>HISTORY</span>
           </div>
 
@@ -40,9 +64,13 @@ function HistoryDrawer({ history, onClose }) {
                 "No extractable text was stored.";
 
               return (
-                <div
+                <button
+                  type="button"
                   className="history-item"
                   key={item.id}
+                  onClick={() =>
+                    onSelect(item)
+                  }
                 >
                   <div className="history-main">
                     <span className="history-id">
@@ -58,7 +86,6 @@ function HistoryDrawer({ history, onClose }) {
                     <span>
                       Score {item.threat_score}/100
                     </span>
-
                     <span>
                       Confidence {item.confidence}%
                     </span>
@@ -72,16 +99,16 @@ function HistoryDrawer({ history, onClose }) {
 
                   <div className="history-input">
                     {preview.length > 90
-                      ? `${preview.slice(0, 90)}...`
+                      ? preview.slice(0, 90) + "..."
                       : preview}
                   </div>
 
                   <div className="history-date">
-                    {new Date(
-                      `${item.created_at}Z`
-                    ).toLocaleString()}
+                    {formatCreatedAt(
+                      item.created_at
+                    )}
                   </div>
-                </div>
+                </button>
               );
             })
           ) : (

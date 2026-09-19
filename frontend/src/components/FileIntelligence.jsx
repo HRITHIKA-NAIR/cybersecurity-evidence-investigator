@@ -1,5 +1,5 @@
 function FileIntelligence({ fileInfo, analysis }) {
-  if (!fileInfo) {
+  if (!fileInfo && !analysis) {
     return null;
   }
 
@@ -23,36 +23,46 @@ function FileIntelligence({ fileInfo, analysis }) {
         </span>
       </div>
 
-      <div className="file-grid">
-        <div className="file-field">
-          <span>Filename</span>
-          <strong>{fileInfo.filename}</strong>
-        </div>
+      {fileInfo ? (
+        <>
+          <div className="file-grid">
+            <div className="file-field">
+              <span>Filename</span>
+              <strong>{fileInfo.filename}</strong>
+            </div>
 
-        <div className="file-field">
-          <span>Detected Type</span>
-          <strong>{fileInfo.detected_type}</strong>
-        </div>
+            <div className="file-field">
+              <span>Detected Type</span>
+              <strong>{fileInfo.detected_type}</strong>
+            </div>
 
-        <div className="file-field">
-          <span>Declared MIME</span>
-          <strong>
-            {fileInfo.declared_mime || "Not provided"}
-          </strong>
-        </div>
+            <div className="file-field">
+              <span>Declared MIME</span>
+              <strong>
+                {fileInfo.declared_mime || "Not provided"}
+              </strong>
+            </div>
 
-        <div className="file-field">
-          <span>Size</span>
-          <strong>
-            {fileInfo.size_bytes.toLocaleString()} bytes
-          </strong>
-        </div>
-      </div>
+            <div className="file-field">
+              <span>Size</span>
+              <strong>
+                {fileInfo.size_bytes.toLocaleString()} bytes
+              </strong>
+            </div>
+          </div>
 
-      <div className="file-hash">
-        <span>SHA-256</span>
-        <code>{fileInfo.sha256}</code>
-      </div>
+          <div className="file-hash">
+            <span>SHA-256</span>
+            <code>{fileInfo.sha256}</code>
+          </div>
+        </>
+      ) : (
+        <p className="limitation-note">
+          File metadata is not available for this stored
+          history record, but persisted static findings
+          are shown below.
+        </p>
+      )}
 
       <div className="file-findings">
         <h3>

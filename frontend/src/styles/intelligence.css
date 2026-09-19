@@ -1,0 +1,303 @@
+.email-panel,
+.file-panel {
+  border-color: #2b4555;
+}
+
+.email-note,
+.email-auth-note,
+.file-note {
+  margin: 6px 0 0;
+  color: #778592;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.email-grid,
+.file-grid,
+.url-grid,
+.threat-grid,
+.intel-stats {
+  display: grid;
+  gap: 10px;
+}
+
+.email-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.file-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.email-field,
+.file-field,
+.file-hash,
+.url-grid > div,
+.threat-card {
+  min-width: 0;
+  padding: 12px;
+  background: #0d141b;
+  border: 1px solid #202e39;
+  border-radius: 8px;
+}
+
+.email-field span,
+.file-field span,
+.file-hash span,
+.url-grid span,
+.intel-stats span {
+  display: block;
+  margin-bottom: 6px;
+  color: #687582;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.email-field strong,
+.file-field strong,
+.url-grid strong {
+  display: block;
+  color: #d7dee5;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.email-auth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.email-auth span {
+  padding: 7px 10px;
+  background: #0d141b;
+  border: 1px solid #263746;
+  border-radius: 999px;
+  color: #93a1ad;
+  font-size: 11px;
+}
+
+.email-auth strong {
+  color: #d7dee5;
+  text-transform: uppercase;
+}
+
+.email-auth-note {
+  margin-top: 9px;
+}
+
+.email-warnings,
+.file-findings,
+.file-urls,
+.url-section {
+  margin-top: 16px;
+}
+
+.email-warnings ul,
+.file-urls ul,
+.url-section ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.email-warnings li,
+.file-urls li,
+.url-section li {
+  margin-bottom: 6px;
+  color: #b8c2cb;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.file-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.analysis-badge {
+  padding: 6px 9px;
+  border: 1px solid #315066;
+  border-radius: 999px;
+  color: #7cc7f5;
+  background: rgba(59, 130, 246, 0.08);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.file-hash {
+  margin-top: 10px;
+}
+
+.file-hash code,
+.file-urls code,
+.url-card code {
+  color: #a9bac8;
+  font-size: 11px;
+}
+
+.qr-source {
+  color: #73818d;
+  font-size: 10px;
+}
+
+.url-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.url-card {
+  padding: 14px;
+  background: #0d141b;
+  border: 1px solid #22313d;
+  border-radius: 8px;
+}
+
+.url-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.url-finding.positive {
+  color: #9acdbd;
+}
+
+.url-finding.warning {
+  color: #e6b75f;
+}
+
+.url-finding.suspicious {
+  color: #e98b8b;
+}
+
+.redirect-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.redirect-list li {
+  margin-bottom: 7px;
+}
+
+.redirect-list code,
+.redirect-list span {
+  display: block;
+}
+
+.redirect-list span {
+  margin-top: 3px;
+  color: #65727e;
+  font-size: 10px;
+}
+
+.threat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  margin-top: 16px;
+}
+
+.threat-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.intel-status {
+  padding: 4px 7px;
+  border: 1px solid #33414f;
+  border-radius: 999px;
+  color: #9ba8b3;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.intel-success {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.intel-stats {
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 12px;
+}
+
+.intel-stats div {
+  padding: 8px;
+  background: #101820;
+  border-radius: 6px;
+}
+
+.intel-stats strong {
+  font-size: 15px;
+}
+
+.evidence-groups {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.evidence-group h3 {
+  margin: 0 0 8px;
+  color: #9ba8b3;
+  text-transform: capitalize;
+}
+
+.evidence-list {
+  display: grid;
+  gap: 6px;
+}
+
+.evidence-item {
+  background: #0d141b;
+  border: 1px solid #202e39;
+  border-radius: 7px;
+}
+
+.evidence-item summary {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.evidence-item summary span {
+  color: #9ba8b3;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.evidence-confidence {
+  color: #6f7d89 !important;
+}
+
+.evidence-item pre {
+  max-height: 260px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: #0a1016;
+  color: #bac5ce;
+  border-top: 1px solid #202e39;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .file-heading {
+    flex-direction: column;
+  }
+
+  .url-grid,
+  .intel-stats {
+    grid-template-columns: 1fr;
+  }
+}

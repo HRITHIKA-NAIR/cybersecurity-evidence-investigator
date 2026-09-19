@@ -6,64 +6,17 @@ html,
 body,
 #root {
   margin: 0;
+  min-width: 320px;
   min-height: 100%;
   background: #0b0f14;
 }
 
 body {
-  min-width: 320px;
   min-height: 100vh;
 }
 
 button,
-textarea {
+textarea,
+input {
   font: inherit;
-}
-
-.upload-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 132px;
-  border: 1px dashed #465564;
-  border-radius: 8px;
-  cursor: pointer;
-  background: #0b0f14;
-  padding: 16px;
-  text-align: center;
-}
-
-.upload-box:hover {
-  border-color: #3b82f6;
-}
-
-.upload-title {
-  font-weight: 600;
-}
-
-.upload-text {
-  color: #8d9aa6;
-  font-size: 14px;
-}
-
-.upload-formats {
-  color: #586572;
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.upload-box input {
-  margin-top: 5px;
-  max-width: 100%;
-}
-
-.divider {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 18px 0;
-  color: #687582;
-  font-size: 12px;
 }
