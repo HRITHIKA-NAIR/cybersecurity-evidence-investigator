@@ -33,15 +33,21 @@ def _no_security_evidence(
                 "originating_ip"
             )
             or any(
-                email_analysis.get(
-                    "authentication",
-                    {},
-                ).get(name)
-                != "not_reported"
-                for name in (
-                    "spf",
-                    "dkim",
-                    "dmarc",
+                (
+                    status
+                    and status
+                    != "not_reported"
+                )
+                for status in (
+                    email_analysis.get(
+                        "authentication",
+                        {},
+                    ).get(name)
+                    for name in (
+                        "spf",
+                        "dkim",
+                        "dmarc",
+                    )
                 )
             )
         )
