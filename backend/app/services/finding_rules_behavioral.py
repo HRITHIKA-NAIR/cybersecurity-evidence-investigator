@@ -64,6 +64,39 @@ def classify_behavioral_findings(
             )
         )
 
+
+    for item in matching(
+        evidence_items,
+        "web_attack",
+    ):
+        value = item.value
+        findings.append(
+            new_finding(
+                value["attack_type"],
+                value["category"],
+                value.get(
+                    "severity",
+                    "Medium",
+                ),
+                value.get(
+                    "status",
+                    "Indicator Present",
+                ),
+                int(
+                    value.get(
+                        "confidence",
+                        75,
+                    )
+                ),
+                [item.id],
+                "web_attack_detector",
+                value.get(
+                    "limitations",
+                    [],
+                ),
+            )
+        )
+
     url_items = [
         item
         for item in matching(

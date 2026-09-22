@@ -32,6 +32,13 @@ function ChallengePanel({
 
       <div className="challenge-summary">
         <div>
+          <span>Revised risk score</span>
+          <strong>
+            {result.revised_threat_score}/100
+          </strong>
+        </div>
+
+        <div>
           <span>Revised confidence</span>
           <strong>
             {result.revised_confidence}%
@@ -49,6 +56,26 @@ function ChallengePanel({
       </div>
 
       <p>{result.reasoning}</p>
+
+      {result.persistence?.status ===
+        "unavailable" && (
+        <p className="warning-text">
+          {result.persistence.message}
+        </p>
+      )}
+
+      {result.uncertainty?.length > 0 && (
+        <div className="challenge-evidence">
+          <h3>Uncertainty</h3>
+          <ul>
+            {result.uncertainty.map(
+              (item, index) => (
+                <li key={index}>{item}</li>
+              )
+            )}
+          </ul>
+        </div>
+      )}
 
       <div className="challenge-evidence">
         <h3>Counter-Evidence</h3>

@@ -40,3 +40,13 @@ openpyxl>=3.1,<4
 # V2 QR and advanced URL analysis
 tldextract>=5.1,<6
 opencv-python-headless>=4.11,<5
+
+# V2 PostgreSQL persistence
+psycopg[binary]>=3.2,<4
+psycopg-pool>=3.2,<4
+
+# V2 archive inspection
+py7zr>=1.1.3,<2
+oletools>=0.60.2,<1
+beautifulsoup4>=4.12,<5
+lxml>=5,<7

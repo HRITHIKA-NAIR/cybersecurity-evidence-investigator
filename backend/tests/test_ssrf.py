@@ -8,6 +8,9 @@ def test_blocks_loopback_target():
 
     assert result["status"] == "blocked"
     assert result["hops"] == []
+    assert result["blocked_url"] == (
+        "http://127.0.0.1/"
+    )
 
 
 def test_blocks_cloud_metadata_target():
@@ -33,7 +36,10 @@ def test_revalidates_every_redirect_hop(monkeypatch):
 
         return ["127.0.0.1"]
 
-    def fake_request(url):
+    def fake_request(url, addresses):
+        assert addresses == [
+            "93.184.216.34"
+        ]
         return {
             "status_code": 302,
             "location": (
@@ -74,7 +80,7 @@ def test_returns_completed_for_public_non_redirect(
     monkeypatch.setattr(
         ssrf,
         "_request_once",
-        lambda url: {
+        lambda url, addresses: {
             "status_code": 200,
             "location": None,
             "method": "HEAD",

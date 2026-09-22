@@ -58,6 +58,31 @@ def _collect_indicators(
         )
 
 
+    truncated = indicators.get(
+        "truncated",
+        {},
+    )
+    limited = [
+        key
+        for key, value in truncated.items()
+        if value
+    ]
+
+    if limited:
+        builder.add(
+            "analysis_limitation",
+            "indicator_extractor",
+            {
+                "truncated_categories": limited,
+            },
+            summary=(
+                "Indicator extraction was bounded "
+                "for: "
+                + ", ".join(limited)
+            ),
+        )
+
+
 def build_evidence_items(
     *,
     content: str,
@@ -68,6 +93,7 @@ def build_evidence_items(
     email_analysis: dict | None = None,
     file_analysis: dict | None = None,
     social_signals: list[dict] | None = None,
+    web_attack_signals: list[dict] | None = None,
 ) -> list[EvidenceItem]:
     builder = EvidenceBuilder()
 
@@ -107,6 +133,25 @@ def build_evidence_items(
             ),
             summary=signal.get(
                 "message"
+            ),
+        )
+
+
+    for signal in web_attack_signals or []:
+        builder.add(
+            "web_attack",
+            "web_attack_detector",
+            signal,
+            confidence=(
+                signal.get(
+                    "confidence",
+                    75,
+                )
+                / 100
+            ),
+            summary=(
+                "Submitted evidence contains "
+                f"{signal['attack_type']}."
             ),
         )
 

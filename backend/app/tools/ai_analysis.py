@@ -25,31 +25,69 @@ def _no_security_evidence(
             "emails",
         )
     )
+
+    authentication = (
+        email_analysis.get(
+            "authentication",
+            {},
+        )
+        if email_analysis
+        else {}
+    )
+    auth_failure = any(
+        str(
+            authentication.get(
+                name,
+                "",
+            )
+        ).lower()
+        in {
+            "fail",
+            "softfail",
+            "temperror",
+            "permerror",
+        }
+        for name in (
+            "spf",
+            "dkim",
+            "dmarc",
+        )
+    )
+    routing = (
+        email_analysis.get(
+            "routing_intelligence",
+            {},
+        )
+        if email_analysis
+        else {}
+    )
+    routing_signal = (
+        routing.get("status") == "success"
+        and (
+            int(
+                routing.get(
+                    "malicious",
+                    0,
+                )
+                or 0
+            )
+            > 0
+            or int(
+                routing.get(
+                    "suspicious",
+                    0,
+                )
+                or 0
+            )
+            > 0
+        )
+    )
     email_signal = bool(
         email_analysis
         and (
             email_analysis.get("warnings")
-            or email_analysis.get(
-                "originating_ip"
-            )
-            or any(
-                (
-                    status
-                    and status
-                    != "not_reported"
-                )
-                for status in (
-                    email_analysis.get(
-                        "authentication",
-                        {},
-                    ).get(name)
-                    for name in (
-                        "spf",
-                        "dkim",
-                        "dmarc",
-                    )
-                )
-            )
+            or auth_failure
+            or routing_signal
         )
     )
     file_signal = bool(
@@ -58,10 +96,48 @@ def _no_security_evidence(
             "findings"
         )
     )
+    threat_signal = any(
+        result.get("status") == "success"
+        and (
+            int(
+                result.get(
+                    "malicious",
+                    0,
+                )
+                or 0
+            )
+            > 0
+            or int(
+                result.get(
+                    "suspicious",
+                    0,
+                )
+                or 0
+            )
+            > 0
+            or int(
+                result.get(
+                    "harmless",
+                    0,
+                )
+                or 0
+            )
+            > 0
+            or int(
+                result.get(
+                    "reputation",
+                    0,
+                )
+                or 0
+            )
+            != 0
+        )
+        for result in threat_intelligence
+    )
 
     return (
         no_indicators
-        and not threat_intelligence
+        and not threat_signal
         and not email_signal
         and not file_signal
         and not attack_findings
@@ -238,6 +314,11 @@ def challenge_assessment(
     if not available():
         return {
             "status": "unavailable",
+            "revised_threat_score": (
+                original_assessment[
+                    "threat_score"
+                ]
+            ),
             "revised_verdict": (
                 original_assessment[
                     "verdict"
@@ -249,6 +330,9 @@ def challenge_assessment(
                 ]
             ),
             "counter_evidence": [],
+            "uncertainty": [
+                "Challenge review was unavailable."
+            ],
             "reasoning": (
                 "Gemini API key is not "
                 "configured."
@@ -302,15 +386,18 @@ Rules:
 - QR payloads and URL heuristics are indicators unless stronger evidence exists.
 - Redirect errors/timeouts do not prove safety or maliciousness.
 - If no meaningful counter-evidence exists, say so.
-- Revised confidence must be 0 to 100.
+- Revised threat score and revised confidence must be integers from 0 to 100.
 - Revised verdict must be Low Risk, Suspicious, High Risk, or Inconclusive.
+- uncertainty must list material unknowns or evidence limitations; use [] only when none are material.
 - Return JSON only.
 
 Return exactly:
 {{
+  "revised_threat_score": 0,
   "revised_verdict": "Inconclusive",
   "revised_confidence": 0,
   "counter_evidence": [],
+  "uncertainty": [],
   "reasoning": "Brief evidence-grounded adversarial review.",
   "conclusion_changed": false
 }}
@@ -343,6 +430,11 @@ Evidence and original assessment:
 
         return {
             "status": "error",
+            "revised_threat_score": (
+                original_assessment[
+                    "threat_score"
+                ]
+            ),
             "revised_verdict": (
                 original_assessment[
                     "verdict"
@@ -354,6 +446,9 @@ Evidence and original assessment:
                 ]
             ),
             "counter_evidence": [],
+            "uncertainty": [
+                "Challenge review was unavailable."
+            ],
             "reasoning": (
                 "The conclusion challenge is "
                 "temporarily unavailable."

@@ -65,6 +65,7 @@ function InvestigationInput({
         }
         placeholder="Paste a suspicious URL, email, or text..."
         rows="8"
+        maxLength={100000}
         disabled={Boolean(file)}
       />
 
@@ -76,8 +77,9 @@ function InvestigationInput({
       )}
 
       <p className="processing-notice">
-        Extracted domains and public routing IPs may be
-        checked with VirusTotal. Submitted URLs may be
+        Extracted domains, public routing IPs, and
+        SHA-256 file hashes may be checked with
+        VirusTotal. Submitted URLs may be
         contacted by the backend for bounded redirect
         checks, and extracted content may be processed
         by Gemini. Raw uploaded files are not sent to

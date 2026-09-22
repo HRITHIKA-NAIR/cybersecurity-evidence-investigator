@@ -1,79 +1,56 @@
-from app import database
+import pytest
+
+from app.persistence.config import (
+    DatabaseConfigurationError,
+    normalize_database_url,
+)
+from app.persistence.schema import (
+    SCHEMA_STATEMENTS,
+)
 
 
-def test_persists_structured_v2_evidence(
-    tmp_path,
-    monkeypatch,
-):
-    monkeypatch.setattr(
-        database,
-        "DB_PATH",
-        tmp_path / "test.db",
+def test_remote_database_url_requires_ssl():
+    url = normalize_database_url(
+        "postgresql://user:pass@db.example.com:5432/postgres"
     )
-    database.init_db()
 
-    investigation_id = (
-        database.save_investigation(
-            "test content",
-            {
-                "urls": [],
-                "domains": [],
-                "emails": [],
-            },
-            [],
-            [],
-            {
-                "threat_score": 20,
-                "verdict": "Suspicious",
-                "confidence": 70,
-                "reasoning": "test",
-                "insufficient_evidence": False,
-            },
-            evidence_items=[
-                {
-                    "id": "ev-0001",
-                    "type": "test",
-                    "source": "unit",
-                    "value": "evidence",
-                    "confidence": 1.0,
-                    "artifact_id": None,
-                    "provenance": {},
-                }
-            ],
-            attack_findings=[
-                {
-                    "attack_type": "Test Finding",
-                    "category": "Test",
-                    "severity": "Low",
-                    "status": "Indicator Present",
-                    "confidence": 70,
-                    "evidence_ids": ["ev-0001"],
-                    "detector": "unit",
-                    "limitations": [],
-                }
-            ],
-            attack_chain=[
-                {
-                    "order": 1,
-                    "stage": "Source",
-                    "value": "test",
-                    "confidence": 70,
-                    "evidence_ids": ["ev-0001"],
-                }
-            ],
+    assert "sslmode=require" in url
+
+
+def test_local_database_url_can_remain_local():
+    url = normalize_database_url(
+        "postgresql://user:pass@localhost:5432/evidence"
+    )
+
+    assert "sslmode=" not in url
+
+
+def test_rejects_non_postgresql_database_url():
+    with pytest.raises(
+        DatabaseConfigurationError
+    ):
+        normalize_database_url(
+            "sqlite:///investigations.db"
         )
-    )
 
-    stored = database.get_investigation(
-        investigation_id
-    )
 
-    assert stored["evidence_items"][0][
-        "id"
-    ] == "ev-0001"
-    assert stored["attack_findings"][0][
-        "attack_type"
-    ] == "Test Finding"
-    assert stored["attack_chain"][0][
-        "stage"
-    ] == "Source"
+def test_schema_contains_v2_relational_tables():
+    schema = "\n".join(
+        SCHEMA_STATEMENTS
+    ).lower()
+
+    for table in (
+        "investigations",
+        "artifacts",
+        "evidence_items",
+        "attack_findings",
+        "finding_evidence",
+        "attack_chain_stages",
+        "email_metadata",
+        "redirect_hops",
+        "challenge_results",
+    ):
+        assert (
+            "create table if not exists "
+            + table
+        ) in schema

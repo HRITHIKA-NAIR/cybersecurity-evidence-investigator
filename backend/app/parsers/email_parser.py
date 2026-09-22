@@ -167,20 +167,27 @@ def parse_email(data: bytes) -> dict:
     }
 
     attachments = []
+    attachment_payloads = []
 
     for part in message.iter_attachments():
-        attachments.append(
+        payload = (
+            part.get_payload(
+                decode=True
+            )
+            or b""
+        )
+        metadata = {
+            "filename": part.get_filename(),
+            "content_type": (
+                part.get_content_type()
+            ),
+            "size_bytes": len(payload),
+        }
+        attachments.append(metadata)
+        attachment_payloads.append(
             {
-                "filename": part.get_filename(),
-                "content_type": (
-                    part.get_content_type()
-                ),
-                "size_bytes": len(
-                    part.get_payload(
-                        decode=True
-                    )
-                    or b""
-                ),
+                **metadata,
+                "data": payload,
             }
         )
 
@@ -270,6 +277,9 @@ def parse_email(data: bytes) -> dict:
             str(part)
             for part in content_parts
             if str(part).strip()
+        ),
+        "attachment_payloads": (
+            attachment_payloads
         ),
         "forensics": {
             "claimed_sender_name": (

@@ -1,4 +1,7 @@
 from app.tools.url_analysis import analyze_url
+from app.tools.url_utils import (
+    normalize_http_url,
+)
 
 
 def _messages(result):
@@ -89,4 +92,21 @@ def test_ip_host_does_not_create_registered_domain():
     assert any(
         "IP address" in message
         for message in _messages(result)
+    )
+
+
+
+def test_normalizes_unicode_hostname_to_idna():
+    normalized, hostname = (
+        normalize_http_url(
+            "https://täst.example/path"
+        )
+    )
+
+    assert hostname == (
+        "xn--tst-qla.example"
+    )
+    assert (
+        "xn--tst-qla.example"
+        in normalized
     )

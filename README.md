@@ -1,182 +1,116 @@
 # Cybersecurity Evidence Investigator
 
-An AI-assisted cybersecurity investigation tool that analyses suspicious URLs, emails, text, and uploaded files using threat intelligence and evidence-grounded AI reasoning.
+**EVIDENCE — Evidence before verdict.**
 
-Instead of simply predicting whether something is "safe" or "malicious", the system collects evidence, explains its assessment, and allows the user to **challenge the conclusion** through a counter-evidence review.
+Cybersecurity Evidence Investigator is an evidence-first web application for investigating suspicious text, URLs, emails and uploaded artifacts. Deterministic parsers and detectors collect evidence first; threat-intelligence services and Gemini reason over that evidence afterward.
 
-## Live Demo
+## Version 2
 
-**Frontend:** https://evidence-m0j5.onrender.com/`
+Version 2 follows the approved SRS/SDD/TDD v2.1 baseline.
 
-**Backend API:**  
+### Core capabilities
+
+- Pasted suspicious text, URLs and email content
+- Drag-and-drop or selected file uploads
+- TXT, MD, CSV, JSON, EML, PDF, DOCX/DOCM, PPTX/PPTM, XLSX/XLSM, HTML, HTM, SVG, JS, PS1, VBS, BAT, CMD, ZIP, 7Z and common image formats
+- Static identification of supported shortcut/disk-image containers (LNK/ISO) without mounting or execution
+- Email header/routing/authentication forensics
+- Supported email attachments routed through the same static file-analysis pipeline
+- Static Office/PDF/HTML/SVG/script/archive inspection
+- QR decoding from supported images and documents
+- URL normalization, registered-domain analysis and bounded redirects
+- SSRF protection on every redirect hop
+- VirusTotal domain, IP and SHA-256 hash intelligence without uploading files
+- Multi-label attack findings with exact evidence references
+- Evidence-backed attack-chain reconstruction
+- Overall score, verdict, confidence and grounded reasoning
+- Challenge Conclusion adversarial review
+- PostgreSQL persistence with Supabase as the selected hosted provider
+- Latest-10 investigation history
+- Responsive analyst dashboard
+
+## Live services
+
+Frontend:
+Use the Render static-site URL configured for the EVIDENCE frontend.
+
+Backend:
 https://cybersecurity-evidence-investigator.onrender.com
 
-**API Documentation:**  
+OpenAPI:
 https://cybersecurity-evidence-investigator.onrender.com/docs
 
----
+The public services may not reflect the newest feature branch until the release deployment is completed.
 
-## Key Features
-
-- Analyse suspicious URLs, emails, and text
-- Upload `.txt` and `.eml` files
-- Extract URLs, domains, and email addresses
-- Analyse suspicious URL characteristics
-- Investigate domains using VirusTotal
-- Assess evidence using Google Gemini
-- Generate:
-  - Threat score from `0–100`
-  - Risk verdict
-  - Confidence score
-  - Evidence-grounded reasoning
-- Return `Inconclusive` when evidence is insufficient
-- Challenge an AI conclusion with an adversarial second review
-- Identify counter-evidence and revise confidence/verdict
-- Store investigations using SQLite
-- View the latest 10 investigations from the History sidebar
-
----
-
-## How It Works
+## Architecture
 
 ```text
-User Input / File
-        ↓
-Indicator Extraction
-        ↓
-Local URL Analysis
-        ↓
-VirusTotal Threat Intelligence
-        ↓
-Gemini Evidence Analysis
-        ↓
-Threat Score + Verdict + Confidence
-        ↓
-SQLite Investigation History
-        ↓
-Challenge Conclusion
-        ↓
-Counter-Evidence Review
+React / Vite
+     |
+     | HTTPS / REST
+     v
+FastAPI orchestration
+     |
+     +-- ingestion + validation
+     +-- format parsers
+     +-- specialist detectors
+     +-- URL / redirect safety
+     +-- VirusTotal enrichment
+     +-- EvidenceItem normalization
+     +-- multi-label AttackFindings
+     +-- attack-chain builder
+     +-- Gemini evidence synthesis
+     |
+     v
+PostgreSQL / Supabase
 ```
 
-The backend uses explicit **FastAPI orchestration** to coordinate each investigation stage.
+The backend intentionally uses explicit FastAPI orchestration. There is no LangGraph dependency and no RAG/vector database.
 
----
+## Evidence model
 
-## Evidence-First AI
+The application separates deterministic/tool evidence from AI interpretation.
 
-Gemini is instructed to reason only from evidence collected during the investigation.
+Each structured finding contains:
 
-The application applies several safeguards:
+- attack type
+- category
+- severity
+- status
+- confidence
+- evidence IDs
+- source detector
+- limitations
 
-- HTTPS does not automatically mean a site is legitimate.
-- Zero malicious detections do not guarantee safety.
-- VirusTotal `undetected` results are not treated as harmless.
-- Absence of malicious evidence is not automatically evidence of safety.
-- Unsupported prior knowledge about domains or organisations should not influence the assessment.
-- Cases with insufficient evidence can return `Inconclusive`.
+Supported finding statuses include **Detected**, **Likely**, **Indicator Present**, **Requires Dynamic Analysis**, **Not Applicable** and **Insufficient Evidence**.
 
-A deterministic abstention guardrail is also used to reduce false certainty when cybersecurity evidence is unavailable.
+Unknown evidence is not treated as safe evidence.
 
----
+## File safety
 
-## Challenge Conclusion
+Uploaded artifacts are treated as untrusted.
 
-The **Challenge Conclusion** feature performs a second adversarial review of the initial assessment.
+- Maximum upload size: 10 MB
+- Extracted text is bounded
+- Archive item count, expanded size, compression ratio and inspection time are bounded
+- Nested email attachment analysis is count- and depth-limited
+- Office macros, scripts, binaries and embedded payloads are never executed
+- Raw uploaded files are not silently uploaded to VirusTotal
+- SHA-256 hashes may be checked with VirusTotal
+- Static findings do not prove runtime malicious behavior
 
-It checks whether evidence:
+## URL safety
 
-- contradicts the original conclusion,
-- weakens it,
-- was overlooked,
-- was given too much weight,
-- or introduces uncertainty.
+Server-side URL requests:
 
-The review can retain or revise the original verdict and confidence.
+- allow HTTP/HTTPS only
+- use bounded redirects
+- revalidate every redirect hop
+- block private, loopback, link-local, multicast, reserved and cloud-metadata targets
+- use strict network timeouts
+- do not actively scan third-party websites for vulnerabilities
 
----
-
-## Evaluation
-
-The application was evaluated using five controlled test cases:
-
-| Case | Expected | Result |
-|---|---|---|
-| Benign HTTPS URL | Low Risk | Pass |
-| IP-based URL | Suspicious | Pass |
-| Multi-subdomain URL | Suspicious | Pass |
-| Phishing-style text | Suspicious | Pass |
-| Insufficient evidence | Inconclusive | Pass |
-
-**Final evaluation**
-
-- 5 test cases
-- 5 correct verdicts
-- 0 request errors
-- **100% verdict accuracy on the controlled test set**
-- **7.59 s average end-to-end latency**
-
-The 100% result refers only to this small controlled evaluation set and is not a claim of universal threat-detection accuracy.
-
-Evaluation data is available in:
-
-```text
-data/test_cases/evaluation.json
-data/evaluation_results.json
-```
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React, Vite, JavaScript, CSS |
-| Backend | Python, FastAPI, Uvicorn |
-| AI | Google Gemini API |
-| Threat Intelligence | VirusTotal API |
-| Persistence | SQLite |
-| HTTP Client | HTTPX |
-| Deployment | Render |
-| Version Control | Git, GitHub |
-
----
-
-## Project Structure
-
-```text
-cybersecurity-evidence-investigator/
-│
-├── backend/
-│   ├── app/
-│   │   ├── tools/
-│   │   │   ├── ai_analysis.py
-│   │   │   ├── indicators.py
-│   │   │   ├── url_analysis.py
-│   │   │   └── virustotal.py
-│   │   ├── database.py
-│   │   └── main.py
-│   ├── evaluate.py
-│   └── requirements.txt
-│
-├── frontend/
-│   └── src/
-│       ├── App.jsx
-│       ├── App.css
-│       └── index.css
-│
-├── data/
-│   ├── test_cases/
-│   └── evaluation_results.json
-│
-├── .env.example
-├── .gitignore
-└── README.md
-```
-
----
-
-## Local Setup
+## Local setup
 
 ### Backend
 
@@ -185,21 +119,27 @@ cd backend
 python -m venv venv
 ```
 
-Activate the virtual environment and install dependencies:
+Activate the environment, then install:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 ```
 
-Create a local `.env` file:
+Create a root or backend `.env` with backend-only values:
 
 ```env
-GEMINI_API_KEY=your_key
-VIRUSTOTAL_API_KEY=your_key
+GEMINI_API_KEY=
+VIRUSTOTAL_API_KEY=
 FRONTEND_ORIGIN=http://localhost:5173
+DATABASE_URL=postgresql://...
+DB_POOL_MIN=1
+DB_POOL_MAX=5
+DB_POOL_MAX_WAITING=20
 ```
 
-Run:
+For remote PostgreSQL, the application enforces SSL mode when the URL does not already require a stronger mode.
+
+Start:
 
 ```bash
 uvicorn app.main:app --reload --port 8001
@@ -213,46 +153,158 @@ npm install
 npm run dev
 ```
 
-During local development the frontend falls back to:
+Local fallback API:
 
 ```text
 http://127.0.0.1:8001
 ```
 
-For deployment, the frontend uses:
+Deployment uses:
 
 ```env
-VITE_API_URL=https://your-backend-url
+VITE_API_URL=https://your-backend.example
 ```
 
-API keys remain on the backend and are never exposed through Vite.
+Never expose `DATABASE_URL`, Gemini keys or VirusTotal keys through `VITE_*` variables.
 
----
+## PostgreSQL
 
-## Privacy & Security
+Version 2 uses PostgreSQL for runtime persistence. SQLite is not used by the running V2 service.
 
-Submitted domains may be checked using VirusTotal, and submitted content may be processed by Gemini.
+The application creates the v2.1 relational tables and indexes at startup when PostgreSQL is reachable.
 
-Users should avoid submitting confidential or sensitive information.
+An optional one-time legacy migration is available:
 
-API keys are stored as backend environment variables and are excluded from Git.
+```bash
+cd backend
+python scripts/migrate_sqlite_to_postgres.py investigations.db
+```
 
----
+After migration, normal reads and writes use PostgreSQL only.
 
-## Current Limitations
+## Quality gates
 
-- Threat-intelligence quality depends on VirusTotal coverage.
-- LLM responses can vary despite low-temperature generation.
-- A `Low Risk` verdict does not guarantee that content is safe.
-- The evaluation dataset is intentionally small.
-- SQLite is appropriate for this prototype but not intended as a large-scale production database.
-- The free Render deployment uses ephemeral storage, so deployed investigation history may reset after backend restarts.
-- The application is an investigation-support prototype and should not replace professional cybersecurity analysis.
+Backend:
 
----
+```bash
+cd backend
+python -m compileall app
+python -m pytest -q
+```
 
-## About
+Optional live PostgreSQL round-trip:
 
-Built for the **DDS Building AI Application Challenge 2026**.
+```powershell
+$env:RUN_POSTGRES_TESTS="1"
+python -m pytest tests/test_postgres_integration.py -q
+Remove-Item Env:RUN_POSTGRES_TESTS
+```
 
-The project explores how threat intelligence, structured evidence collection, and evidence-grounded LLM reasoning can work together to produce more transparent cybersecurity assessments.
+Optional live Gemini smoke check:
+
+```powershell
+$env:RUN_GEMINI_SMOKE="1"
+python -m pytest test_gemini.py -q
+Remove-Item Env:RUN_GEMINI_SMOKE
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+Controlled evaluation:
+
+```bash
+cd backend
+python evaluate.py
+```
+
+The historical five-case baseline achieved **100% verdict accuracy on that five-case controlled evaluation set**. This is not a claim of universal threat-detection accuracy; the evaluation must be rerun for the final V2 release.
+
+## Production smoke test
+
+After deployment:
+
+```powershell
+cd backend
+$env:EVIDENCE_BASE_URL="https://your-backend.example"
+python smoke_test.py
+Remove-Item Env:EVIDENCE_BASE_URL
+```
+
+This checks health, Swagger docs, text investigation, file investigation, history and Challenge Conclusion.
+
+## API
+
+See [docs/API.md](docs/API.md).
+
+Primary endpoints:
+
+- `GET /`
+- `GET /health`
+- `GET /investigations`
+- `GET /investigations/{id}`
+- `POST /investigate`
+- `POST /investigate-file`
+- `POST /challenge`
+
+## Deployment
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+Selected deployment:
+
+- Render Python backend
+- Render static frontend
+- Supabase-hosted PostgreSQL
+- backend-only environment secrets
+
+## Privacy
+
+The UI discloses that:
+
+- extracted domains, public routing IPs and file hashes may be checked through VirusTotal
+- submitted URLs may be contacted for bounded redirect analysis
+- extracted content may be processed by Gemini
+- raw uploaded files are not sent to VirusTotal by this workflow
+
+Users should avoid submitting confidential material unless they are authorized to process it through the configured external services.
+
+## Current limitations
+
+- Analysis is primarily static; uploaded code/macros/binaries are not executed.
+- Dynamic-only behavior must remain **Requires Dynamic Analysis** or unknown.
+- Email routing geography describes mail infrastructure, not a sender's physical location.
+- Header-reported SPF/DKIM/DMARC is not independent authentication verification.
+- QR decoding can fail on damaged, stylized or unsupported images.
+- Threat-intelligence coverage depends on VirusTotal.
+- LLM synthesis can be unavailable or imperfect; deterministic evidence remains separate.
+- Legacy DOC/PPT/XLS and MSG parsing are deferred.
+- Active vulnerability scanning is intentionally out of scope.
+- Low Risk is not a guarantee of safety.
+
+## Repository hygiene
+
+Do not commit:
+
+- `.env`
+- API keys or database credentials
+- real private email samples
+- user databases
+- malware binaries
+- temporary uploads
+- build output
+
+Safe synthetic fixtures should be used for tests.
+
+## Documentation baseline
+
+- SRS v2.1
+- SDD v2.1
+- TDD v2.1
+
+Implementation changes that realize the approved v2.1 requirements do not create a new documentation version.

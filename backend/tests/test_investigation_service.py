@@ -29,16 +29,18 @@ def test_investigation_returns_structured_v2_outputs(
     )
     monkeypatch.setattr(
         investigation_service,
-        "check_domain",
-        lambda domain: {
-            "domain": domain,
-            "status": "success",
-            "malicious": 0,
-            "suspicious": 0,
-            "harmless": 5,
-            "undetected": 0,
-            "reputation": 0,
-        },
+        "gather_threat_intelligence",
+        lambda indicators, file_info=None: [
+            {
+                "domain": "example.test",
+                "status": "success",
+                "malicious": 0,
+                "suspicious": 0,
+                "harmless": 5,
+                "undetected": 0,
+                "reputation": 0,
+            }
+        ],
     )
     monkeypatch.setattr(
         investigation_service,

@@ -6,6 +6,16 @@ function FileIntelligence({ fileInfo, analysis }) {
   const findings = analysis?.findings || [];
   const qrPayloads = analysis?.qr?.payloads || [];
   const urls = analysis?.urls || [];
+  const metadata = analysis?.metadata || {};
+  const nestedArtifacts =
+    analysis?.nested_artifacts || [];
+  const metadataEntries =
+    Object.entries(metadata).filter(
+      ([, value]) =>
+        value !== null &&
+        value !== undefined &&
+        value !== ""
+    );
 
   return (
     <section className="panel file-panel">
@@ -62,6 +72,49 @@ function FileIntelligence({ fileInfo, analysis }) {
           history record, but persisted static findings
           are shown below.
         </p>
+      )}
+
+      {metadataEntries.length > 0 && (
+        <div className="file-urls">
+          <h3>Document Metadata</h3>
+          <div className="file-grid">
+            {metadataEntries.map(
+              ([key, value]) => (
+                <div
+                  className="file-field"
+                  key={key}
+                >
+                  <span>
+                    {key.replaceAll("_", " ")}
+                  </span>
+                  <strong>
+                    {String(value)}
+                  </strong>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {nestedArtifacts.length > 0 && (
+        <div className="file-urls">
+          <h3>Nested Artifacts</h3>
+          <ul>
+            {nestedArtifacts.map(
+              (artifact, index) => (
+                <li key={index}>
+                  {artifact.file_info?.filename ||
+                    "Unnamed attachment"}{" "}
+                  ·{" "}
+                  {artifact.file_info
+                    ?.detected_type ||
+                    "unknown type"}
+                </li>
+              )
+            )}
+          </ul>
+        </div>
       )}
 
       <div className="file-findings">

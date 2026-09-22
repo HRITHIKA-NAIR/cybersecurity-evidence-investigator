@@ -12,7 +12,11 @@ function CaseSummary({
     <section className="case-summary">
       <div>
         <span>CASE</span>
-        <strong>#{result.investigation_id}</strong>
+        <strong>
+          {result.investigation_id
+            ? "#" + result.investigation_id
+            : "Not saved"}
+        </strong>
       </div>
 
       <div>

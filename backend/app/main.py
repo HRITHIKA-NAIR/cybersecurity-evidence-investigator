@@ -1,4 +1,6 @@
+import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import (
     FastAPI,
@@ -9,14 +11,18 @@ from fastapi import (
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import (
     run_in_threadpool,
 )
 
 from app.database import (
+    DatabaseOperationError,
+    close_database,
+    database_health,
+    get_investigation,
     get_investigations,
-    init_db,
+    init_database,
 )
 from app.parsers.file_reader import (
     FileReaderError,
@@ -30,13 +36,31 @@ from app.services.investigation_service import (
     run_investigation,
 )
 
+LOGGER = logging.getLogger(__name__)
+MAX_TEXT_CHARS = 100_000
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    try:
+        init_database()
+    except Exception as exc:
+        LOGGER.error(
+            "Database initialization failed: %s",
+            type(exc).__name__,
+        )
+
+    yield
+    close_database()
+
+
 app = FastAPI(
     title=(
         "Cybersecurity Evidence "
         "Investigator"
-    )
+    ),
+    lifespan=lifespan,
 )
-init_db()
 
 frontend_origin = os.getenv(
     "FRONTEND_ORIGIN"
@@ -61,7 +85,10 @@ app.add_middleware(
 
 
 class InvestigationRequest(BaseModel):
-    content: str
+    content: str = Field(
+        min_length=1,
+        max_length=MAX_TEXT_CHARS,
+    )
 
 
 class ChallengeRequest(BaseModel):
@@ -80,7 +107,19 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    if not database_health():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Service is running, but "
+                "PostgreSQL is unavailable."
+            ),
+        )
+
+    return {
+        "status": "ok",
+        "database": "ok",
+    }
 
 
 @app.post("/investigate")
@@ -133,9 +172,19 @@ async def investigate_file(
 def challenge(
     request: ChallengeRequest,
 ):
-    result = run_challenge(
-        request.investigation_id
-    )
+    try:
+        result = run_challenge(
+            request.investigation_id
+        )
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Challenge is temporarily "
+                "unavailable because persistent "
+                "history cannot be reached."
+            ),
+        ) from exc
 
     if result is None:
         raise HTTPException(
@@ -150,6 +199,41 @@ def challenge(
 
 @app.get("/investigations")
 def investigations():
-    return get_investigations(
-        limit=10
-    )
+    try:
+        return get_investigations(
+            limit=10
+        )
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Investigation history is "
+                "temporarily unavailable."
+            ),
+        ) from exc
+
+
+@app.get("/investigations/{investigation_id}")
+def investigation_detail(
+    investigation_id: int,
+):
+    try:
+        result = get_investigation(
+            investigation_id
+        )
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Investigation history is "
+                "temporarily unavailable."
+            ),
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Investigation not found.",
+        )
+
+    return result

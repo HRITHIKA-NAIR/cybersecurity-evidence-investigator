@@ -20,6 +20,7 @@ function ThreatIntelligence({
             key={
               (result.domain ||
                 result.ip ||
+                result.hash ||
                 "intel") +
               "-" +
               index
@@ -29,6 +30,7 @@ function ThreatIntelligence({
               <strong>
                 {result.domain ||
                   result.ip ||
+                  result.hash ||
                   "Threat intelligence result"}
               </strong>
               <span

@@ -5,34 +5,12 @@ from app.services.evidence_builder import (
 )
 
 
-def collect_file_evidence(
+def _collect_analysis(
     builder: EvidenceBuilder,
-    file_info: dict | None,
-    file_analysis: dict | None,
+    analysis: dict,
+    artifact_id: str | None,
 ) -> None:
-    artifact_id = (
-        "artifact-1"
-        if file_info
-        else None
-    )
-
-    if file_info:
-        builder.add(
-            "artifact",
-            "ingestion",
-            file_info,
-            artifact_id=artifact_id,
-            summary=(
-                f"File: {file_info['filename']} "
-                f"({file_info['extension']}, "
-                f"{file_info['size_bytes']} bytes)"
-            ),
-        )
-
-    if not file_analysis:
-        return
-
-    for finding in file_analysis.get(
+    for finding in analysis.get(
         "findings",
         [],
     ):
@@ -59,7 +37,7 @@ def collect_file_evidence(
             ),
         )
 
-    for error in file_analysis.get(
+    for error in analysis.get(
         "analysis_errors",
         [],
     ):
@@ -74,10 +52,7 @@ def collect_file_evidence(
             ),
         )
 
-    qr = file_analysis.get(
-        "qr",
-        {},
-    )
+    qr = analysis.get("qr", {})
 
     for payload in qr.get(
         "payloads",
@@ -112,6 +87,76 @@ def collect_file_evidence(
                 "QR analysis limitation: "
                 f"{reason}"
             ),
+        )
+
+    for index, nested in enumerate(
+        analysis.get(
+            "nested_artifacts",
+            [],
+        ),
+        start=1,
+    ):
+        child_info = nested.get(
+            "file_info",
+            {},
+        )
+        child_id = (
+            f"{artifact_id}.{index}"
+            if artifact_id
+            else f"artifact-nested-{index}"
+        )
+
+        builder.add(
+            "artifact",
+            "email_attachment",
+            child_info,
+            artifact_id=child_id,
+            summary=(
+                "Attachment: "
+                f"{child_info.get('filename', 'unnamed')} "
+                f"({child_info.get('extension', 'unknown')})"
+            ),
+        )
+
+        _collect_analysis(
+            builder,
+            nested.get(
+                "file_analysis",
+                {},
+            ),
+            child_id,
+        )
+
+
+def collect_file_evidence(
+    builder: EvidenceBuilder,
+    file_info: dict | None,
+    file_analysis: dict | None,
+) -> None:
+    artifact_id = (
+        "artifact-1"
+        if file_info
+        else None
+    )
+
+    if file_info:
+        builder.add(
+            "artifact",
+            "ingestion",
+            file_info,
+            artifact_id=artifact_id,
+            summary=(
+                f"File: {file_info['filename']} "
+                f"({file_info['extension']}, "
+                f"{file_info['size_bytes']} bytes)"
+            ),
+        )
+
+    if file_analysis:
+        _collect_analysis(
+            builder,
+            file_analysis,
+            artifact_id,
         )
 
 
@@ -173,11 +218,10 @@ def collect_url_evidence(
                 ),
             )
 
-        status = redirect.get(
-            "status"
-        )
-
-        if status == "blocked":
+        if (
+            redirect.get("status")
+            == "blocked"
+        ):
             reason = redirect.get(
                 "reason",
                 "Unsafe redirect target.",
@@ -186,9 +230,12 @@ def collect_url_evidence(
                 "redirect_status",
                 "ssrf_redirect",
                 {
-                    "status": status,
+                    "status": "blocked",
                     "reason": reason,
                     "url": url,
+                    "blocked_url": redirect.get(
+                        "blocked_url"
+                    ),
                 },
                 summary=(
                     "Redirect safety: blocked — "
@@ -204,12 +251,12 @@ def collect_url_evidence(
                 "ssrf_redirect",
                 {
                     "url": url,
-                    "redirect_count": (
-                        redirect[
-                            "redirect_count"
-                        ]
+                    "redirect_count": redirect[
+                        "redirect_count"
+                    ],
+                    "status": redirect.get(
+                        "status"
                     ),
-                    "status": status,
                 },
                 summary=(
                     "Redirect chain followed "
@@ -247,8 +294,7 @@ def collect_email_evidence(
                 ),
             },
             summary=(
-                "Claimed sender address: "
-                f"{sender}"
+                f"Claimed sender address: {sender}"
             ),
         )
 
@@ -259,9 +305,7 @@ def collect_email_evidence(
         "earliest_received_time",
         "originating_ip",
     ):
-        value = email_analysis.get(
-            field
-        )
+        value = email_analysis.get(field)
 
         if value:
             builder.add(
@@ -345,9 +389,11 @@ def collect_threat_evidence(
     threat_intelligence: list[dict],
 ) -> None:
     for result in threat_intelligence:
-        domain = result.get(
-            "domain",
-            "unknown",
+        indicator = (
+            result.get("domain")
+            or result.get("ip")
+            or result.get("hash")
+            or "unknown indicator"
         )
         status = result.get(
             "status",
@@ -361,13 +407,13 @@ def collect_threat_evidence(
                 "malicious, "
                 f"{result.get('suspicious', 0)} "
                 "suspicious detections for "
-                f"{domain}"
+                f"{indicator}"
             )
         else:
             summary = (
                 "VirusTotal: "
                 f"{result.get('message', status)} "
-                f"for {domain}"
+                f"for {indicator}"
             )
 
         builder.add(

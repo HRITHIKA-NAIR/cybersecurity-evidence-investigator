@@ -10,18 +10,32 @@ from app.detectors.qr_detector import (
     IMAGE_EXTENSIONS,
     inspect_qr,
 )
-from app.parsers.archive_parser import parse_archive
+from app.parsers.archive_parser import (
+    parse_7z_archive,
+    parse_archive,
+)
+from app.parsers.attachment_analyzer import (
+    analyze_email_attachments,
+)
 from app.parsers.email_parser import parse_email
 from app.parsers.excel_parser import parse_excel
+from app.parsers.macro_office_parser import (
+    parse_macro_office,
+)
 from app.parsers.pdf_parser import parse_pdf
 from app.parsers.powerpoint_parser import parse_powerpoint
 from app.parsers.word_parser import parse_word
+from app.security.archive_limits import (
+    ArchiveSafetyError,
+    MAX_ARCHIVE_ITEMS,
+    MAX_ARCHIVE_UNCOMPRESSED_BYTES,
+    MAX_COMPRESSION_RATIO,
+    inspect_7z,
+    inspect_zip,
+)
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 50_000
-MAX_ARCHIVE_ITEMS = 500
-MAX_ARCHIVE_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
-MAX_COMPRESSION_RATIO = 100
 
 TEXT_EXTENSIONS = {
     ".txt",
@@ -31,37 +45,70 @@ TEXT_EXTENSIONS = {
     ".html",
     ".htm",
     ".svg",
+    ".js",
+    ".ps1",
+    ".vbs",
+    ".bat",
+    ".cmd",
 }
-SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | IMAGE_EXTENSIONS | {
-    ".eml",
-    ".pdf",
-    ".docx",
-    ".pptx",
-    ".xlsx",
-    ".zip",
+IDENTIFIED_ONLY_EXTENSIONS = {
+    ".lnk",
+    ".iso",
 }
+SUPPORTED_EXTENSIONS = (
+    TEXT_EXTENSIONS
+    | IMAGE_EXTENSIONS
+    | IDENTIFIED_ONLY_EXTENSIONS
+    | {
+        ".eml",
+        ".pdf",
+        ".docx",
+        ".docm",
+        ".pptx",
+        ".pptm",
+        ".xlsx",
+        ".xlsm",
+        ".zip",
+        ".7z",
+    }
+)
 BINARY_EXTENSIONS = {
     ".pdf",
     ".docx",
+    ".docm",
     ".pptx",
+    ".pptm",
     ".xlsx",
+    ".xlsm",
     ".zip",
+    ".7z",
+    ".lnk",
+    ".iso",
 } | IMAGE_EXTENSIONS
 
 
 class FileReaderError(ValueError):
-    def __init__(self, message: str, status_code: int = 400):
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 400,
+    ):
         super().__init__(message)
         self.status_code = status_code
 
 
-def _truncate(text: str) -> tuple[str, bool]:
+def _truncate(
+    text: str,
+) -> tuple[str, bool]:
     text = text.strip()
 
     if len(text) <= MAX_EXTRACTED_CHARS:
         return text, False
 
-    return text[:MAX_EXTRACTED_CHARS], True
+    return (
+        text[:MAX_EXTRACTED_CHARS],
+        True,
+    )
 
 
 def _decode_text(data: bytes) -> str:
@@ -71,64 +118,101 @@ def _decode_text(data: bytes) -> str:
     )
 
 
-def _inspect_zip(data: bytes) -> list[zipfile.ZipInfo]:
-    with zipfile.ZipFile(
-        BytesIO(data)
-    ) as archive:
-        infos = archive.infolist()
-
-    if len(infos) > MAX_ARCHIVE_ITEMS:
+def _inspect_zip(
+    data: bytes,
+) -> list[zipfile.ZipInfo]:
+    try:
+        return inspect_zip(data)
+    except ArchiveSafetyError as exc:
         raise FileReaderError(
-            "Archive contains too many items "
-            f"(maximum {MAX_ARCHIVE_ITEMS}).",
+            str(exc),
             413,
-        )
+        ) from exc
 
-    total_uncompressed = sum(
-        info.file_size
-        for info in infos
+
+def _inspect_7z(data: bytes) -> list:
+    try:
+        return inspect_7z(data)
+    except ArchiveSafetyError as exc:
+        raise FileReaderError(
+            str(exc),
+            413,
+        ) from exc
+    except Exception as exc:
+        raise FileReaderError(
+            "Could not safely inspect 7z archive.",
+            422,
+        ) from exc
+
+
+def _looks_like_lnk(
+    data: bytes,
+) -> bool:
+    shell_link_clsid = (
+        b"\x4c\x00\x00\x00"
+        b"\x01\x14\x02\x00"
+        b"\x00\x00\x00\x00"
+        b"\xc0\x00\x00\x00"
+        b"\x00\x00\x00\x46"
+    )
+    return data.startswith(
+        shell_link_clsid
     )
 
-    if (
-        total_uncompressed
-        > MAX_ARCHIVE_UNCOMPRESSED_BYTES
-    ):
-        raise FileReaderError(
-            "Archive expands beyond the safe "
-            "processing limit.",
-            413,
-        )
 
-    for info in infos:
-        ratio = (
-            info.file_size
-            / max(info.compress_size, 1)
-        )
-
-        if (
-            ratio > MAX_COMPRESSION_RATIO
-            and info.file_size > 1024 * 1024
-        ):
-            raise FileReaderError(
-                "Archive has an unsafe "
-                "compression ratio.",
-                413,
-            )
-
-    return infos
+def _looks_like_iso(
+    data: bytes,
+) -> bool:
+    return (
+        len(data) > 32774
+        and data[
+            32769:32774
+        ] == b"CD001"
+    )
 
 
-def _detect_type(data: bytes) -> str:
+def _detect_type(
+    data: bytes,
+) -> str:
     if data.startswith(b"%PDF-"):
         return ".pdf"
 
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+    if data.startswith(b"MZ"):
+        return ".exe"
+
+    if data.startswith(
+        b"\x7fELF"
+    ):
+        return "elf"
+
+    if data.startswith(
+        b"\xd0\xcf\x11\xe0"
+        b"\xa1\xb1\x1a\xe1"
+    ):
+        return "ole"
+
+    if _looks_like_lnk(data):
+        return ".lnk"
+
+    if _looks_like_iso(data):
+        return ".iso"
+
+    if data.startswith(
+        b"\x89PNG\r\n\x1a\n"
+    ):
         return ".png"
 
-    if data.startswith(b"\xff\xd8\xff"):
+    if data.startswith(
+        b"\xff\xd8\xff"
+    ):
         return ".jpg"
 
-    if data.startswith((b"GIF87a", b"GIF89a")):
+    if data.startswith(
+        (
+            b"GIF87a",
+            b"GIF89a",
+        )
+    ):
         return ".gif"
 
     if data.startswith(b"BM"):
@@ -141,6 +225,12 @@ def _detect_type(data: bytes) -> str:
     ):
         return ".webp"
 
+    if data.startswith(
+        b"7z\xbc\xaf'\x1c"
+    ):
+        _inspect_7z(data)
+        return ".7z"
+
     if zipfile.is_zipfile(
         BytesIO(data)
     ):
@@ -149,34 +239,72 @@ def _detect_type(data: bytes) -> str:
             info.filename
             for info in infos
         ]
+        content_types = ""
+
+        try:
+            with zipfile.ZipFile(
+                BytesIO(data)
+            ) as archive:
+                content_types = archive.read(
+                    "[Content_Types].xml"
+                ).decode(
+                    "utf-8",
+                    errors="ignore",
+                ).lower()
+        except (
+            KeyError,
+            zipfile.BadZipFile,
+        ):
+            pass
+
+        macro_enabled = (
+            "macroenabled"
+            in content_types
+        )
 
         if any(
             name.startswith("word/")
             for name in names
         ):
-            return ".docx"
+            return (
+                ".docm"
+                if macro_enabled
+                else ".docx"
+            )
 
         if any(
             name.startswith("ppt/")
             for name in names
         ):
-            return ".pptx"
+            return (
+                ".pptm"
+                if macro_enabled
+                else ".pptx"
+            )
 
         if any(
             name.startswith("xl/")
             for name in names
         ):
-            return ".xlsx"
+            return (
+                ".xlsm"
+                if macro_enabled
+                else ".xlsx"
+            )
 
         return ".zip"
+
+    if b"\x00" in data[:8192]:
+        return "binary"
 
     return "text"
 
 
-def read_uploaded_file(
+def _read_uploaded_file(
     filename: str,
     content_type: str | None,
     data: bytes,
+    depth: int = 0,
 ) -> dict:
     safe_name = Path(
         filename or "upload"
@@ -214,14 +342,17 @@ def read_uploaded_file(
     equivalent_types = {
         ".jpeg": ".jpg",
     }
-    expected_detected = equivalent_types.get(
-        extension,
-        extension,
+    expected_detected = (
+        equivalent_types.get(
+            extension,
+            extension,
+        )
     )
 
     if (
         extension in BINARY_EXTENSIONS
-        and detected_type != expected_detected
+        and detected_type
+        != expected_detected
     ):
         raise FileReaderError(
             "The file content does not "
@@ -231,7 +362,8 @@ def read_uploaded_file(
 
     if (
         extension
-        in TEXT_EXTENSIONS | {".eml"}
+        in TEXT_EXTENSIONS
+        | {".eml"}
         and detected_type != "text"
     ):
         raise FileReaderError(
@@ -251,20 +383,50 @@ def read_uploaded_file(
         data,
         extension,
     )
-    file_analysis["qr"] = qr_analysis
+    file_analysis["qr"] = (
+        qr_analysis
+    )
     file_analysis["urls"] = list(
         dict.fromkeys(
-            file_analysis.get("urls", [])
-            + qr_analysis.get("urls", [])
+            file_analysis.get(
+                "urls",
+                [],
+            )
+            + qr_analysis.get(
+                "urls",
+                [],
+            )
         )
     )
 
     readers = {
         ".pdf": parse_pdf,
         ".docx": parse_word,
+        ".docm": (
+            lambda payload:
+            parse_macro_office(
+                payload,
+                ".docm",
+            )
+        ),
         ".pptx": parse_powerpoint,
+        ".pptm": (
+            lambda payload:
+            parse_macro_office(
+                payload,
+                ".pptm",
+            )
+        ),
         ".xlsx": parse_excel,
+        ".xlsm": (
+            lambda payload:
+            parse_macro_office(
+                payload,
+                ".xlsm",
+            )
+        ),
         ".zip": parse_archive,
+        ".7z": parse_7z_archive,
     }
 
     email_analysis = None
@@ -283,6 +445,15 @@ def read_uploaded_file(
             )
             parser = "image"
 
+        elif extension in (
+            IDENTIFIED_ONLY_EXTENSIONS
+        ):
+            text = (
+                "Static identification only: "
+                f"{extension} artifact."
+            )
+            parser = "identified_only"
+
         elif extension == ".eml":
             email_result = parse_email(
                 data
@@ -295,14 +466,69 @@ def read_uploaded_file(
                     "forensics"
                 ]
             )
+            nested, nested_text = (
+                analyze_email_attachments(
+                    email_result.get(
+                        "attachment_payloads",
+                        [],
+                    ),
+                    email_analysis.get(
+                        "attachments",
+                        [],
+                    ),
+                    depth=depth,
+                    read_file=(
+                        _read_uploaded_file
+                    ),
+                )
+            )
+
+            if nested:
+                file_analysis[
+                    "nested_artifacts"
+                ] = nested
+
+                nested_urls = []
+
+                for artifact in nested:
+                    nested_urls.extend(
+                        artifact[
+                            "file_analysis"
+                        ].get(
+                            "urls",
+                            [],
+                        )
+                    )
+
+                file_analysis[
+                    "urls"
+                ] = list(
+                    dict.fromkeys(
+                        file_analysis.get(
+                            "urls",
+                            [],
+                        )
+                        + nested_urls
+                    )
+                )
+
+            if nested_text:
+                text = (
+                    text
+                    + "\n\n"
+                    + "\n\n".join(
+                        nested_text
+                    )
+                )
+
             parser = "eml"
 
         else:
             text = readers[
                 extension
             ](data)
-            parser = extension.lstrip(
-                "."
+            parser = (
+                extension.lstrip(".")
             )
 
     except FileReaderError:
@@ -349,3 +575,16 @@ def read_uploaded_file(
         ] = email_analysis
 
     return result
+
+
+def read_uploaded_file(
+    filename: str,
+    content_type: str | None,
+    data: bytes,
+) -> dict:
+    return _read_uploaded_file(
+        filename,
+        content_type,
+        data,
+        0,
+    )

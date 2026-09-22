@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.database import (
+    DatabaseOperationError,
     get_investigation,
     save_challenge,
 )
@@ -59,8 +60,23 @@ def run_challenge(
         ),
     )
 
-    save_challenge(
-        investigation_id,
-        result,
-    )
+    try:
+        save_challenge(
+            investigation_id,
+            result,
+        )
+        result["persistence"] = {
+            "status": "saved",
+            "message": None,
+        }
+    except DatabaseOperationError:
+        result["persistence"] = {
+            "status": "unavailable",
+            "message": (
+                "Challenge completed, but the "
+                "revised result could not be "
+                "saved to persistent history."
+            ),
+        }
+
     return result

@@ -85,12 +85,19 @@ class AssessmentResult(BaseModel):
 
 
 class ChallengeResult(BaseModel):
+    revised_threat_score: int = Field(
+        ge=0,
+        le=100,
+    )
     revised_verdict: Verdict
     revised_confidence: int = Field(
         ge=0,
         le=100,
     )
     counter_evidence: list[str] = Field(
+        default_factory=list
+    )
+    uncertainty: list[str] = Field(
         default_factory=list
     )
     reasoning: str

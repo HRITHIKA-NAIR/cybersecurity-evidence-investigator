@@ -7,6 +7,11 @@ load_dotenv()
 
 API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
 BASE_URL = "https://www.virustotal.com/api/v3"
+CLIENT = httpx.Client(
+    base_url=BASE_URL,
+    timeout=10,
+    trust_env=False,
+)
 
 
 def _lookup(resource: str, value: str, key: str):
@@ -25,12 +30,11 @@ def _lookup(resource: str, value: str, key: str):
         }
 
     try:
-        response = httpx.get(
-            f"{BASE_URL}/{resource}/{value}",
+        response = CLIENT.get(
+            f"/{resource}/{value}",
             headers={
                 "x-apikey": API_KEY,
             },
-            timeout=10,
         )
 
         if response.status_code == 404:
@@ -177,5 +181,50 @@ def check_ip(ip_address: str):
         "reputation": data.get(
             "reputation",
             0,
+        ),
+    }
+
+
+
+def check_hash(sha256: str):
+    data, error = _lookup(
+        "files",
+        sha256,
+        "hash",
+    )
+
+    if error:
+        return error
+
+    stats = data.get(
+        "last_analysis_stats",
+        {},
+    )
+
+    return {
+        "hash": sha256,
+        "status": "success",
+        "malicious": stats.get(
+            "malicious",
+            0,
+        ),
+        "suspicious": stats.get(
+            "suspicious",
+            0,
+        ),
+        "harmless": stats.get(
+            "harmless",
+            0,
+        ),
+        "undetected": stats.get(
+            "undetected",
+            0,
+        ),
+        "reputation": data.get(
+            "reputation",
+            0,
+        ),
+        "type_description": data.get(
+            "type_description"
         ),
     }

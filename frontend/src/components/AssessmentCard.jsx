@@ -67,10 +67,20 @@ function AssessmentCard({
               </p>
             )}
 
+            {result.persistence?.status ===
+              "unavailable" && (
+              <p className="warning-text">
+                {result.persistence.message}
+              </p>
+            )}
+
             <button
               className="challenge-button"
               onClick={onChallenge}
-              disabled={challengeLoading}
+              disabled={
+                challengeLoading ||
+                !result.investigation_id
+              }
             >
               {challengeLoading
                 ? "Challenging Conclusion..."

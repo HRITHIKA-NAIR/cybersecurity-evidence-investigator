@@ -2,14 +2,26 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import (
+    urljoin,
+    urlsplit,
+)
 
-import httpx
+import certifi
+import urllib3
 
-from app.tools.url_utils import normalize_http_url
+from app.tools.url_utils import (
+    normalize_http_url,
+)
 
 MAX_REDIRECTS = 5
-REDIRECT_CODES = {301, 302, 303, 307, 308}
+REDIRECT_CODES = {
+    301,
+    302,
+    303,
+    307,
+    308,
+}
 CLOUD_METADATA_HOSTS = {
     "metadata",
     "metadata.google.internal",
@@ -34,8 +46,22 @@ class URLResolutionError(RuntimeError):
     pass
 
 
-def _blocked_ip(ip_text: str) -> bool:
-    ip = ipaddress.ip_address(ip_text)
+class PinnedRequestError(RuntimeError):
+    pass
+
+
+class PinnedTimeoutError(
+    PinnedRequestError
+):
+    pass
+
+
+def _blocked_ip(
+    ip_text: str,
+) -> bool:
+    ip = ipaddress.ip_address(
+        ip_text
+    )
 
     if (
         ip.is_private
@@ -50,13 +76,19 @@ def _blocked_ip(ip_text: str) -> bool:
 
     return any(
         ip in network
-        for network in CLOUD_METADATA_NETWORKS
+        for network
+        in CLOUD_METADATA_NETWORKS
     )
 
 
-def _resolve_ips(hostname: str, port: int) -> list[str]:
+def _resolve_ips(
+    hostname: str,
+    port: int,
+) -> list[str]:
     try:
-        literal = ipaddress.ip_address(hostname)
+        literal = ipaddress.ip_address(
+            hostname
+        )
         return [str(literal)]
     except ValueError:
         pass
@@ -75,10 +107,17 @@ def _resolve_ips(hostname: str, port: int) -> list[str]:
     )
 
 
-def validate_public_target(url: str) -> tuple[str, list[str]]:
-    normalized, hostname = normalize_http_url(url)
+def validate_public_target(
+    url: str,
+) -> tuple[str, list[str]]:
+    normalized, hostname = (
+        normalize_http_url(url)
+    )
 
-    if hostname in CLOUD_METADATA_HOSTS:
+    if (
+        hostname
+        in CLOUD_METADATA_HOSTS
+    ):
         raise UnsafeRedirectTarget(
             "Cloud metadata hostname is blocked."
         )
@@ -87,7 +126,9 @@ def validate_public_target(url: str) -> tuple[str, list[str]]:
 
     try:
         port = parsed.port or (
-            443 if parsed.scheme == "https" else 80
+            443
+            if parsed.scheme == "https"
+            else 80
         )
     except ValueError as exc:
         raise UnsafeRedirectTarget(
@@ -106,7 +147,8 @@ def validate_public_target(url: str) -> tuple[str, list[str]]:
 
     if not addresses:
         raise UnsafeRedirectTarget(
-            "Hostname did not resolve to an IP address."
+            "Hostname did not resolve to "
+            "an IP address."
         )
 
     if any(
@@ -114,61 +156,219 @@ def validate_public_target(url: str) -> tuple[str, list[str]]:
         for address in addresses
     ):
         raise UnsafeRedirectTarget(
-            "Target resolves to a blocked internal or "
-            "non-public address."
+            "Target resolves to a blocked "
+            "internal or non-public address."
         )
 
     return normalized, addresses
 
 
-def _request_once(url: str) -> dict:
-    timeout = httpx.Timeout(
-        6.0,
-        connect=3.0,
+def _host_header(
+    hostname: str,
+    port: int,
+    scheme: str,
+) -> str:
+    host = (
+        f"[{hostname}]"
+        if ":" in hostname
+        else hostname
+    )
+    default_port = (
+        443
+        if scheme == "https"
+        else 80
     )
 
-    with httpx.Client(
-        timeout=timeout,
-        follow_redirects=False,
-        trust_env=False,
-        headers={
-            "User-Agent": (
-                "Cybersecurity-Evidence-Investigator/2"
-            )
-        },
-    ) as client:
-        response = client.head(url)
+    if port != default_port:
+        return f"{host}:{port}"
 
-        if response.status_code in {405, 501}:
-            with client.stream(
-                "GET",
-                url,
-            ) as streamed:
-                return {
-                    "status_code": streamed.status_code,
-                    "location": streamed.headers.get(
+    return host
+
+
+def _request_with_pool(
+    pool,
+    target: str,
+    host_header: str,
+) -> dict:
+    headers = {
+        "Host": host_header,
+        "User-Agent": (
+            "Cybersecurity-Evidence-Investigator/2"
+        ),
+    }
+
+    response = pool.request(
+        "HEAD",
+        target,
+        headers=headers,
+        redirect=False,
+        retries=False,
+        preload_content=False,
+    )
+
+    try:
+        if response.status not in {
+            405,
+            501,
+        }:
+            return {
+                "status_code": (
+                    response.status
+                ),
+                "location": (
+                    response.headers.get(
                         "location"
-                    ),
-                    "method": "GET",
-                }
+                    )
+                ),
+                "method": "HEAD",
+            }
+    finally:
+        response.close()
 
+    response = pool.request(
+        "GET",
+        target,
+        headers=headers,
+        redirect=False,
+        retries=False,
+        preload_content=False,
+    )
+
+    try:
         return {
-            "status_code": response.status_code,
-            "location": response.headers.get(
-                "location"
+            "status_code": (
+                response.status
             ),
-            "method": "HEAD",
+            "location": (
+                response.headers.get(
+                    "location"
+                )
+            ),
+            "method": "GET",
         }
+    finally:
+        response.close()
+
+
+def _request_once(
+    url: str,
+    addresses: list[str],
+) -> dict:
+    parsed = urlsplit(url)
+    hostname = parsed.hostname
+
+    if not hostname:
+        raise PinnedRequestError(
+            "URL does not contain a hostname."
+        )
+
+    port = parsed.port or (
+        443
+        if parsed.scheme == "https"
+        else 80
+    )
+    target = parsed.path or "/"
+
+    if parsed.query:
+        target += "?" + parsed.query
+
+    host_header = _host_header(
+        hostname,
+        port,
+        parsed.scheme,
+    )
+    timeout = urllib3.Timeout(
+        connect=3.0,
+        read=6.0,
+    )
+    last_error = None
+
+    for address in addresses:
+        pool = None
+
+        try:
+            if parsed.scheme == "https":
+                pool = (
+                    urllib3
+                    .HTTPSConnectionPool(
+                        address,
+                        port=port,
+                        timeout=timeout,
+                        maxsize=1,
+                        block=True,
+                        cert_reqs=(
+                            "CERT_REQUIRED"
+                        ),
+                        ca_certs=(
+                            certifi.where()
+                        ),
+                        assert_hostname=(
+                            hostname
+                        ),
+                        server_hostname=(
+                            hostname
+                        ),
+                    )
+                )
+            else:
+                pool = (
+                    urllib3
+                    .HTTPConnectionPool(
+                        address,
+                        port=port,
+                        timeout=timeout,
+                        maxsize=1,
+                        block=True,
+                    )
+                )
+
+            return _request_with_pool(
+                pool,
+                target,
+                host_header,
+            )
+
+        except urllib3.exceptions.TimeoutError as exc:
+            last_error = PinnedTimeoutError(
+                "URL request timed out."
+            )
+            last_error.__cause__ = exc
+
+        except (
+            urllib3.exceptions.HTTPError,
+            OSError,
+            ValueError,
+        ) as exc:
+            last_error = PinnedRequestError(
+                "Could not connect to "
+                "the URL."
+            )
+            last_error.__cause__ = exc
+
+        finally:
+            if pool is not None:
+                pool.close()
+
+    if last_error:
+        raise last_error
+
+    raise PinnedRequestError(
+        "No validated address was available."
+    )
 
 
 def safe_follow(url: str) -> dict:
     hops = []
     current = url
 
-    for index in range(MAX_REDIRECTS + 1):
+    for index in range(
+        MAX_REDIRECTS + 1
+    ):
         try:
             normalized, addresses = (
-                validate_public_target(current)
+                validate_public_target(
+                    current
+                )
             )
         except URLResolutionError as exc:
             return {
@@ -184,6 +384,7 @@ def safe_follow(url: str) -> dict:
             return {
                 "status": "blocked",
                 "reason": str(exc),
+                "blocked_url": current,
                 "hops": hops,
                 "redirect_count": max(
                     0,
@@ -193,23 +394,27 @@ def safe_follow(url: str) -> dict:
 
         try:
             response = _request_once(
-                normalized
+                normalized,
+                addresses,
             )
-        except httpx.TimeoutException:
+        except PinnedTimeoutError:
             return {
                 "status": "timeout",
-                "reason": "URL request timed out.",
+                "reason": (
+                    "URL request timed out."
+                ),
                 "hops": hops,
                 "redirect_count": max(
                     0,
                     len(hops) - 1,
                 ),
             }
-        except (httpx.RequestError, ValueError):
+        except PinnedRequestError:
             return {
                 "status": "error",
                 "reason": (
-                    "Could not connect to the URL."
+                    "Could not connect to "
+                    "the URL."
                 ),
                 "hops": hops,
                 "redirect_count": max(
@@ -221,13 +426,17 @@ def safe_follow(url: str) -> dict:
         hops.append(
             {
                 "url": normalized,
-                "resolved_ips": addresses,
-                "status_code": response[
-                    "status_code"
-                ],
-                "method": response[
-                    "method"
-                ],
+                "resolved_ips": (
+                    addresses
+                ),
+                "status_code": (
+                    response[
+                        "status_code"
+                    ]
+                ),
+                "method": (
+                    response["method"]
+                ),
             }
         )
 
@@ -251,9 +460,12 @@ def safe_follow(url: str) -> dict:
 
         if index >= MAX_REDIRECTS:
             return {
-                "status": "limit_reached",
+                "status": (
+                    "limit_reached"
+                ),
                 "reason": (
-                    "Maximum redirect limit reached."
+                    "Maximum redirect "
+                    "limit reached."
                 ),
                 "hops": hops,
                 "redirect_count": max(
@@ -269,7 +481,9 @@ def safe_follow(url: str) -> dict:
 
     return {
         "status": "limit_reached",
-        "reason": "Maximum redirect limit reached.",
+        "reason": (
+            "Maximum redirect limit reached."
+        ),
         "hops": hops,
         "redirect_count": max(
             0,

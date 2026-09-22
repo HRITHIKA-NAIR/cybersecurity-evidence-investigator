@@ -170,6 +170,14 @@ function EmailIntelligence({ analysis }) {
                     "Unnamed attachment"}{" "}
                   · {attachment.content_type} ·{" "}
                   {attachment.size_bytes} bytes
+                  {attachment.analysis_status
+                    ? " · " +
+                      attachment.analysis_status
+                    : ""}
+                  {attachment.sha256
+                    ? " · SHA-256 " +
+                      attachment.sha256
+                    : ""}
                 </li>
               )
             )}

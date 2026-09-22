@@ -22,7 +22,7 @@ import {
 import "./App.css";
 
 const SUPPORTED_FILES =
-  ".txt,.md,.csv,.json,.eml,.pdf,.docx,.pptx,.xlsx,.html,.htm,.svg,.zip,.png,.jpg,.jpeg,.gif,.bmp,.webp";
+  ".txt,.md,.csv,.json,.eml,.pdf,.docx,.docm,.pptx,.pptm,.xlsx,.xlsm,.html,.htm,.svg,.js,.ps1,.vbs,.bat,.cmd,.lnk,.iso,.zip,.7z,.png,.jpg,.jpeg,.gif,.bmp,.webp";
 
 function App() {
   const [content, setContent] = useState("");

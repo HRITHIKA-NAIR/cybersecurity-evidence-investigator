@@ -49,8 +49,10 @@ function UploadZone({
         </span>
 
         <span className="upload-formats">
-          PDF · DOCX · PPTX · XLSX · EML · ZIP ·
-          HTML/SVG · PNG/JPG/WEBP/GIF/BMP ·
+          PDF · DOCX/DOCM · PPTX/PPTM · XLSX/XLSM ·
+          EML · ZIP/7Z · HTML/SVG ·
+          JS/PS1/VBS/BAT/CMD · LNK/ISO ·
+          PNG/JPG/WEBP/GIF/BMP ·
           TXT/MD/CSV/JSON · max 10 MB
         </span>
       </div>

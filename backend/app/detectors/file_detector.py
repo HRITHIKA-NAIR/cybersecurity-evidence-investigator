@@ -7,10 +7,21 @@ from io import BytesIO
 from pathlib import Path
 from xml.etree import ElementTree
 
+from app.detectors.signature_detector import (
+    polyglot_findings,
+)
+from app.parsers.pdf_metadata import (
+    inspect_pdf_metadata,
+)
+from app.security.archive_limits import (
+    inspect_7z,
+)
+
 URL_RE = re.compile(r"https?://[^\s\"'<>\\)]+", re.I)
 BIDI = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 DECOY_EXTS = {
-    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".pdf", ".doc", ".docx", ".docm", ".xls", ".xlsx", ".xlsm",
+    ".ppt", ".pptx", ".pptm",
     ".jpg", ".jpeg", ".png", ".txt",
 }
 EXEC_EXTS = {".exe", ".dll", ".msi", ".scr", ".js", ".vbs", ".ps1", ".bat", ".cmd", ".lnk"}
@@ -23,18 +34,52 @@ MIME = {
     ".eml": {"message/rfc822"},
     ".pdf": {"application/pdf"},
     ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    ".docm": {"application/vnd.ms-word.document.macroenabled.12"},
     ".pptx": {"application/vnd.openxmlformats-officedocument.presentationml.presentation"},
+    ".pptm": {"application/vnd.ms-powerpoint.presentation.macroenabled.12"},
     ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+    ".xlsm": {"application/vnd.ms-excel.sheet.macroenabled.12"},
     ".html": {"text/html", "text/plain"},
     ".htm": {"text/html", "text/plain"},
     ".svg": {"image/svg+xml", "text/xml", "application/xml", "text/plain"},
     ".zip": {"application/zip", "application/x-zip-compressed"},
+    ".7z": {"application/x-7z-compressed"},
     ".png": {"image/png"},
     ".jpg": {"image/jpeg"},
     ".jpeg": {"image/jpeg"},
     ".gif": {"image/gif"},
     ".bmp": {"image/bmp"},
     ".webp": {"image/webp"},
+    ".js": {
+        "text/javascript",
+        "application/javascript",
+        "text/plain",
+    },
+    ".ps1": {
+        "text/plain",
+        "application/octet-stream",
+    },
+    ".vbs": {
+        "text/vbscript",
+        "text/plain",
+        "application/octet-stream",
+    },
+    ".bat": {
+        "text/plain",
+        "application/octet-stream",
+    },
+    ".cmd": {
+        "text/plain",
+        "application/octet-stream",
+    },
+    ".lnk": {
+        "application/octet-stream",
+        "application/x-ms-shortcut",
+    },
+    ".iso": {
+        "application/octet-stream",
+        "application/x-iso9660-image",
+    },
 }
 SEVERITY = {"Info": 0, "Low": 1, "Medium": 2, "High": 3}
 
@@ -259,8 +304,140 @@ def _markup_analysis(data, extension):
             "Indicator Present", 90,
         ))
 
+    lure_patterns = (
+        "verify you are human",
+        "click allow",
+        "update your browser",
+        "install the update",
+        "paste into powershell",
+        "run this command",
+    )
+
+    if any(
+        pattern in lower
+        for pattern in lure_patterns
+    ):
+        findings.append(_finding(
+            "Fake Verification or Update Lure",
+            "Social Engineering",
+            "High",
+            [f"{kind} contains verification/update lure language."],
+            "Indicator Present", 85,
+        ))
+
     urls = [url for url in parser.urls + URL_RE.findall(text) if url not in IGNORED_URLS]
     return findings, _unique(urls)
+
+
+def _identified_container_analysis(
+    extension,
+):
+    if extension == ".lnk":
+        return [
+            _finding(
+                "Shortcut File Identified",
+                "Shortcut / Container",
+                "Medium",
+                [
+                    "Windows shortcut structure was "
+                    "identified. It was not executed."
+                ],
+                "Requires Dynamic Analysis",
+                100,
+            )
+        ], []
+
+    if extension == ".iso":
+        return [
+            _finding(
+                "Disk Image Identified",
+                "Disk Image / Container",
+                "Low",
+                [
+                    "ISO 9660 structure was identified. "
+                    "Embedded content was not mounted "
+                    "or executed."
+                ],
+                "Requires Dynamic Analysis",
+                100,
+            )
+        ], []
+
+    return [], []
+
+
+def _script_analysis(
+    data,
+    extension,
+):
+    text = data.decode(
+        "utf-8",
+        errors="replace",
+    )
+    lower = text.lower()
+    findings = []
+    indicators = (
+        (
+            "Encoded Script Command",
+            (
+                "-encodedcommand",
+                " -enc ",
+                "frombase64string(",
+            ),
+            "High",
+        ),
+        (
+            "Script Execution Primitive",
+            (
+                "invoke-expression",
+                "iex(",
+                "wscript.shell",
+                "createobject(",
+                "start-process",
+                "cmd.exe",
+                "powershell.exe",
+            ),
+            "Medium",
+        ),
+        (
+            "Script Download Primitive",
+            (
+                "downloadstring(",
+                "invoke-webrequest",
+                "curl ",
+                "wget ",
+                "xmlhttp",
+            ),
+            "High",
+        ),
+    )
+
+    for name, tokens, severity in indicators:
+        if any(
+            token in lower
+            for token in tokens
+        ):
+            findings.append(
+                _finding(
+                    name,
+                    "Script Static Analysis",
+                    severity,
+                    [
+                        (
+                            f"{extension} contains a "
+                            "script primitive associated "
+                            "with encoded execution, "
+                            "process launch, or downloads."
+                        )
+                    ],
+                    "Indicator Present",
+                    85,
+                )
+            )
+
+    return findings, _unique(
+        URL_RE.findall(text)
+    )
 
 
 def _archive_analysis(data):
@@ -282,6 +459,12 @@ def _archive_analysis(data):
         if info.filename.startswith(("/", "\\")) or ".." in Path(info.filename).parts
     ]
     encrypted = [info.filename for info in infos if info.flag_bits & 0x1]
+    nested_archives = [
+        info.filename
+        for info in infos
+        if Path(info.filename).suffix.lower()
+        in {".zip", ".7z"}
+    ]
 
     if executable:
         findings.append(_finding(
@@ -298,24 +481,122 @@ def _archive_analysis(data):
             "Encrypted Archive Entry", "Archive Visibility", "Medium",
             ["Archive contains encrypted entries that cannot be statically inspected."],
         ))
+    if nested_archives:
+        findings.append(_finding(
+            "Nested Archive Present", "Archive Content", "Low",
+            [f"Archive contains nested archive(s): {', '.join(nested_archives[:5])}"],
+            "Indicator Present", 90,
+        ))
+
+    return findings, []
+
+
+def _seven_zip_analysis(data):
+    infos = inspect_7z(data)
+    names = [
+        info.filename
+        for info in infos
+    ]
+    findings = []
+
+    executable = [
+        name
+        for name in names
+        if Path(name).suffix.lower()
+        in EXEC_EXTS
+    ]
+    nested_archives = [
+        name
+        for name in names
+        if Path(name).suffix.lower()
+        in {".zip", ".7z"}
+    ]
+
+    if executable:
+        findings.append(_finding(
+            "Executable or Script in Archive", "Archive Content", "High",
+            [f"Archive contains potentially executable or script content: {', '.join(executable[:5])}"],
+        ))
+
+    if nested_archives:
+        findings.append(_finding(
+            "Nested Archive Present", "Archive Content", "Low",
+            [f"Archive contains nested archive(s): {', '.join(nested_archives[:5])}"],
+            "Indicator Present", 90,
+        ))
+
+    for name in names:
+        findings.extend(
+            _filename_findings(
+                Path(name).name
+            )
+        )
 
     return findings, []
 
 
 def analyze_file(filename, extension, declared_mime, detected_type, data):
-    findings = _filename_findings(filename) + _mime_findings(extension, declared_mime)
+    findings = (
+        _filename_findings(filename)
+        + _mime_findings(
+            extension,
+            declared_mime,
+        )
+        + polyglot_findings(data)
+    )
     urls = []
     errors = []
+    metadata = {}
 
     try:
-        if extension in {".docx", ".pptx", ".xlsx"}:
+        if extension in {
+            ".docx",
+            ".docm",
+            ".pptx",
+            ".pptm",
+            ".xlsx",
+            ".xlsm",
+        }:
             extra_findings, urls = _office_analysis(data)
         elif extension == ".pdf":
             extra_findings, urls = _pdf_analysis(data)
+            try:
+                metadata, annotation_urls = (
+                    inspect_pdf_metadata(data)
+                )
+                urls = _unique(
+                    urls + annotation_urls
+                )
+            except Exception:
+                errors.append(
+                    "PDF metadata inspection was unavailable."
+                )
         elif extension in {".html", ".htm", ".svg"}:
             extra_findings, urls = _markup_analysis(data, extension)
         elif extension == ".zip":
             extra_findings, urls = _archive_analysis(data)
+        elif extension == ".7z":
+            extra_findings, urls = _seven_zip_analysis(data)
+        elif extension in {
+            ".js",
+            ".ps1",
+            ".vbs",
+            ".bat",
+            ".cmd",
+        }:
+            extra_findings, urls = _script_analysis(
+                data,
+                extension,
+            )
+        elif extension in {
+            ".lnk",
+            ".iso",
+        }:
+            extra_findings, urls = (
+                _identified_container_analysis(
+                    extension
+                )
+            )
         else:
             extra_findings = []
     except Exception:
@@ -338,6 +619,7 @@ def analyze_file(filename, extension, declared_mime, detected_type, data):
         "urls": _unique(urls),
         "finding_count": len(findings),
         "highest_severity": highest,
+        "metadata": metadata,
         "analysis_mode": "static_only",
         "analysis_errors": errors,
         "executed": False,

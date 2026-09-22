@@ -212,8 +212,11 @@ def inspect_qr(
 
         elif extension in {
             ".docx",
+            ".docm",
             ".pptx",
+            ".pptm",
             ".xlsx",
+            ".xlsm",
         }:
             candidates = _office_candidates(
                 data
