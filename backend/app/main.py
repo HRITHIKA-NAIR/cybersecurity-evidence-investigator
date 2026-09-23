@@ -6,12 +6,17 @@ from fastapi import (
     FastAPI,
     File,
     HTTPException,
+    Request,
     UploadFile,
 )
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.concurrency import (
     run_in_threadpool,
 )
@@ -84,6 +89,46 @@ app.add_middleware(
 )
 
 
+def _client_key(request: Request) -> str:
+    """Rate-limit key derived from the caller's IP.
+
+    Render (and most PaaS hosts) sit the app behind a reverse proxy, so
+    ``request.client.host`` is the proxy's address, not the caller's. Render
+    sets ``X-Forwarded-For`` to "<client>, <proxy hops...>" - the first
+    entry is the original client.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+limiter = Limiter(
+    key_func=_client_key,
+    default_limits=["60/minute"],
+)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(RateLimitExceeded)
+def _rate_limit_handler(
+    _request: Request,
+    exc: RateLimitExceeded,
+):
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "detail": (
+                "Too many requests. Please wait "
+                "before trying again."
+            )
+        },
+    )
+    response.headers["Retry-After"] = "60"
+    return response
+
+
 class InvestigationRequest(BaseModel):
     content: str = Field(
         min_length=1,
@@ -123,16 +168,20 @@ def health():
 
 
 @app.post("/investigate")
+@limiter.limit("5/minute;60/day")
 def investigate(
-    request: InvestigationRequest,
+    request: Request,
+    payload: InvestigationRequest,
 ):
     return run_investigation(
-        request.content
+        payload.content
     )
 
 
 @app.post("/investigate-file")
+@limiter.limit("5/minute;60/day")
 async def investigate_file(
+    request: Request,
     file: UploadFile = File(...),
 ):
     data = await file.read(
@@ -169,12 +218,14 @@ async def investigate_file(
 
 
 @app.post("/challenge")
+@limiter.limit("10/minute;100/day")
 def challenge(
-    request: ChallengeRequest,
+    request: Request,
+    payload: ChallengeRequest,
 ):
     try:
         result = run_challenge(
-            request.investigation_id
+            payload.investigation_id
         )
     except DatabaseOperationError as exc:
         raise HTTPException(
@@ -198,7 +249,10 @@ def challenge(
 
 
 @app.get("/investigations")
-def investigations():
+@limiter.limit("30/minute")
+def investigations(
+    request: Request,
+):
     try:
         return get_investigations(
             limit=10
@@ -214,8 +268,10 @@ def investigations():
 
 
 @app.get("/investigations/{investigation_id}")
+@limiter.limit("30/minute")
 def investigation_detail(
     investigation_id: int,
+    request: Request,
 ):
     try:
         result = get_investigation(
