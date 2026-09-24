@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /account
+
+Sitemap: https://evidence-m0j5.onrender.com/sitemap.xml

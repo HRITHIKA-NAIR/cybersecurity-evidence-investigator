@@ -1,0 +1,89 @@
+{
+  "$description": "EVIDENCE v2.3 handoff snapshot. Runtime authority is frontend/src/styles/workspace.css; update both when changing tokens.",
+  "themes": {
+    "light": {
+      "bg": {
+        "$type": "color",
+        "$value": "#f6f8f7"
+      },
+      "field": {
+        "$type": "color",
+        "$value": "#fff"
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#182c29"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "#586b65"
+      },
+      "border": {
+        "$type": "color",
+        "$value": "#dce5e0"
+      },
+      "accent": {
+        "$type": "color",
+        "$value": "#12654c"
+      },
+      "soft": {
+        "$type": "color",
+        "$value": "#e9f3ed"
+      },
+      "hero": {
+        "$type": "color",
+        "$value": "#e0eee4"
+      },
+      "focus": {
+        "$type": "color",
+        "$value": "#196dda"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": "#ac302d"
+      }
+    },
+    "dark": {
+      "bg": {
+        "$type": "color",
+        "$value": "#101a18"
+      },
+      "field": {
+        "$type": "color",
+        "$value": "#182521"
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#e7f0eb"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "#a5bab0"
+      },
+      "border": {
+        "$type": "color",
+        "$value": "#33473e"
+      },
+      "accent": {
+        "$type": "color",
+        "$value": "#8ee2b5"
+      },
+      "soft": {
+        "$type": "color",
+        "$value": "#23392e"
+      },
+      "hero": {
+        "$type": "color",
+        "$value": "#223b2c"
+      },
+      "focus": {
+        "$type": "color",
+        "$value": "#96bfff"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": "#ffaaa4"
+      }
+    }
+  }
+}

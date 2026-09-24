@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import (
     FastAPI,
+    Depends,
     File,
     HTTPException,
     UploadFile,
@@ -11,7 +12,7 @@ from fastapi import (
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import (
     run_in_threadpool,
 )
@@ -36,6 +37,12 @@ from app.services.investigation_service import (
     run_investigation,
 )
 
+from app.security.auth import require_user
+from app.security.http import SecurityMiddleware
+from app.security.budgets import reserve_budget
+from app.security.concurrency import analysis_slot
+from app.persistence.reader import get_investigation_summaries
+
 LOGGER = logging.getLogger(__name__)
 MAX_TEXT_CHARS = 100_000
 
@@ -43,7 +50,8 @@ MAX_TEXT_CHARS = 100_000
 @asynccontextmanager
 async def lifespan(_app):
     try:
-        init_database()
+        if os.getenv("APP_ENV") != "production":
+            init_database()
     except Exception as exc:
         LOGGER.error(
             "Database initialization failed: %s",
@@ -60,12 +68,15 @@ app = FastAPI(
         "Investigator"
     ),
     lifespan=lifespan,
+    docs_url=None if os.getenv("APP_ENV") == "production" else "/docs",
+    redoc_url=None if os.getenv("APP_ENV") == "production" else "/redoc",
+    openapi_url=None if os.getenv("APP_ENV") == "production" else "/openapi.json",
 )
 
 frontend_origin = os.getenv(
     "FRONTEND_ORIGIN"
 )
-allowed_origins = [
+allowed_origins = [] if os.getenv("APP_ENV") == "production" else [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
@@ -75,12 +86,13 @@ if frontend_origin:
         frontend_origin.rstrip("/")
     )
 
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -90,9 +102,16 @@ class InvestigationRequest(BaseModel):
         max_length=MAX_TEXT_CHARS,
     )
 
+    @field_validator("content")
+    @classmethod
+    def meaningful_content(cls, value):
+        if not value.strip():
+            raise ValueError("Enter content to investigate.")
+        return value
+
 
 class ChallengeRequest(BaseModel):
-    investigation_id: int
+    investigation_id: int = Field(gt=0)
 
 
 @app.get("/")
@@ -125,16 +144,20 @@ def health():
 @app.post("/investigate")
 def investigate(
     request: InvestigationRequest,
+    owner_id: str = Depends(analysis_slot),
 ):
+    reserve_budget(owner_id)
     return run_investigation(
-        request.content
+        request.content, owner_id=owner_id
     )
 
 
 @app.post("/investigate-file")
 async def investigate_file(
     file: UploadFile = File(...),
+    owner_id: str = Depends(analysis_slot),
 ):
+    await run_in_threadpool(reserve_budget, owner_id)
     data = await file.read(
         MAX_UPLOAD_BYTES + 1
     )
@@ -165,16 +188,19 @@ async def investigate_file(
         parsed.get(
             "file_analysis"
         ),
+        owner_id=owner_id,
     )
 
 
 @app.post("/challenge")
 def challenge(
     request: ChallengeRequest,
+    owner_id: str = Depends(analysis_slot),
 ):
+    reserve_budget(owner_id)
     try:
         result = run_challenge(
-            request.investigation_id
+            request.investigation_id, owner_id=owner_id
         )
     except DatabaseOperationError as exc:
         raise HTTPException(
@@ -198,10 +224,12 @@ def challenge(
 
 
 @app.get("/investigations")
-def investigations():
+def investigations(summary: bool = False, owner_id: str = Depends(require_user)):
     try:
+        if summary:
+            return get_investigation_summaries(owner_id=owner_id)
         return get_investigations(
-            limit=10
+            limit=100, owner_id=owner_id
         )
     except DatabaseOperationError as exc:
         raise HTTPException(
@@ -216,10 +244,11 @@ def investigations():
 @app.get("/investigations/{investigation_id}")
 def investigation_detail(
     investigation_id: int,
+    owner_id: str = Depends(require_user),
 ):
     try:
         result = get_investigation(
-            investigation_id
+            investigation_id, owner_id=owner_id
         )
     except DatabaseOperationError as exc:
         raise HTTPException(
@@ -237,3 +266,23 @@ def investigation_detail(
         )
 
     return result
+
+
+@app.get("/live")
+def live():
+    return {"status": "running"}
+
+
+@app.delete("/investigations/{investigation_id}")
+def delete_investigation(investigation_id: int, owner_id: str = Depends(require_user)):
+    from app.persistence.access import user_connection
+    try:
+        with user_connection(owner_id) as conn:
+            row = conn.execute("DELETE FROM investigations WHERE id = %s AND owner_id = %s::uuid RETURNING id", (investigation_id, owner_id)).fetchone()
+        if not row:
+            raise HTTPException(404, "Investigation not found.")
+        return {"status": "deleted"}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, "History is temporarily unavailable.") from None

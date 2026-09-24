@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from threading import RLock
 
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -14,6 +15,7 @@ from app.persistence.schema import (
 )
 
 _POOL: ConnectionPool | None = None
+_POOL_LOCK = RLock()
 
 
 def _pool_size(
@@ -35,6 +37,12 @@ def _pool_size(
 
 
 def get_pool() -> ConnectionPool:
+    # Startup readiness and requests can arrive together on a cold service.
+    with _POOL_LOCK:
+        return _get_pool_locked()
+
+
+def _get_pool_locked() -> ConnectionPool:
     global _POOL
 
     if _POOL is None:
@@ -77,6 +85,7 @@ def get_pool() -> ConnectionPool:
                 timeout=10,
             )
         except Exception as exc:
+            _POOL.close()
             _POOL = None
             raise DatabaseOperationError(
                 "Could not connect to PostgreSQL."
@@ -102,45 +111,39 @@ def init_database() -> None:
 
 
 def database_health() -> bool:
+    """Readiness requires the schema, RLS policies and usable restricted roles."""
+    from app.persistence.schema import PRIVATE_TABLES
     try:
-        pool = get_pool()
-
-        with pool.connection(
-            timeout=5
-        ) as connection:
-            row = connection.execute(
-                """
-                SELECT
-                    to_regclass(
-                        'public.investigations'
-                    ) AS table_name
-                """
-            ).fetchone()
-
-        if (
-            row
-            and row.get("table_name")
-        ):
-            return True
-
-        init_database()
-
-        with pool.connection(
-            timeout=5
-        ) as connection:
-            row = connection.execute(
-                """
-                SELECT
-                    to_regclass(
-                        'public.investigations'
-                    ) AS table_name
-                """
-            ).fetchone()
-
-        return bool(
-            row
-            and row.get("table_name")
-        )
+        with get_pool().connection(timeout=5) as connection:
+            with connection.transaction():
+                if os.getenv("APP_ENV") == "production":
+                    login = connection.execute("""
+                        SELECT r.rolsuper, r.rolbypassrls, r.rolinherit,
+                          EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                                  WHERE n.nspname = 'public' AND c.relname = ANY(%s)
+                                  AND c.relowner = r.oid) AS owns_tables
+                        FROM pg_roles r WHERE r.rolname = session_user
+                    """, (list(PRIVATE_TABLES),)).fetchone()
+                    if not login or any(login[key] for key in ("rolsuper", "rolbypassrls", "rolinherit", "owns_tables")):
+                        return False
+                row = connection.execute("""
+                    SELECT count(*) AS ready
+                    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public' AND c.relname = ANY(%s)
+                    AND c.relrowsecurity
+                    AND EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid
+                                AND p.polname = 'evidence_owner_access')
+                """, (list(PRIVATE_TABLES),)).fetchone()
+                if not row or row["ready"] != len(PRIVATE_TABLES):
+                    return False
+                connection.execute("SET LOCAL ROLE evidence_app")
+                role = connection.execute("SELECT rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user").fetchone()
+                if not role or role["rolbypassrls"] or role["rolsuper"]:
+                    return False
+                connection.execute("SELECT id FROM investigations LIMIT 0")
+                connection.execute("SET LOCAL ROLE evidence_budget")
+                connection.execute("SELECT bucket FROM usage_budgets LIMIT 0")
+        return True
     except Exception:
         return False
 
@@ -148,6 +151,7 @@ def database_health() -> bool:
 def close_database() -> None:
     global _POOL
 
-    if _POOL is not None:
-        _POOL.close()
-        _POOL = None
+    with _POOL_LOCK:
+        if _POOL is not None:
+            _POOL.close()
+            _POOL = None

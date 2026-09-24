@@ -1,13 +1,13 @@
 .email-panel,
 .file-panel {
-  border-color: #2b4555;
+  border-color: var(--muted);
 }
 
 .email-note,
 .email-auth-note,
 .file-note {
   margin: 6px 0 0;
-  color: #778592;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -36,8 +36,8 @@
 .threat-card {
   min-width: 0;
   padding: 12px;
-  background: #0d141b;
-  border: 1px solid #202e39;
+  background: var(--field);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -48,7 +48,7 @@
 .intel-stats span {
   display: block;
   margin-bottom: 6px;
-  color: #687582;
+  color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -58,7 +58,7 @@
 .file-field strong,
 .url-grid strong {
   display: block;
-  color: #d7dee5;
+  color: var(--text);
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -73,15 +73,15 @@
 
 .email-auth span {
   padding: 7px 10px;
-  background: #0d141b;
-  border: 1px solid #263746;
+  background: var(--field);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  color: #93a1ad;
+  color: var(--muted);
   font-size: 11px;
 }
 
 .email-auth strong {
-  color: #d7dee5;
+  color: var(--text);
   text-transform: uppercase;
 }
 
@@ -107,7 +107,7 @@
 .file-urls li,
 .url-section li {
   margin-bottom: 6px;
-  color: #b8c2cb;
+  color: var(--text);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -122,7 +122,7 @@
 
 .analysis-badge {
   padding: 6px 9px;
-  border: 1px solid #315066;
+  border: 1px solid var(--border);
   border-radius: 999px;
   color: #7cc7f5;
   background: rgba(59, 130, 246, 0.08);
@@ -138,12 +138,12 @@
 .file-hash code,
 .file-urls code,
 .url-card code {
-  color: #a9bac8;
+  color: var(--text);
   font-size: 11px;
 }
 
 .qr-source {
-  color: #73818d;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -155,8 +155,8 @@
 
 .url-card {
   padding: 14px;
-  background: #0d141b;
-  border: 1px solid #22313d;
+  background: var(--field);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -165,7 +165,7 @@
 }
 
 .url-finding.positive {
-  color: #9acdbd;
+  color: var(--muted);
 }
 
 .url-finding.warning {
@@ -192,7 +192,7 @@
 
 .redirect-list span {
   margin-top: 3px;
-  color: #65727e;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -210,9 +210,9 @@
 
 .intel-status {
   padding: 4px 7px;
-  border: 1px solid #33414f;
+  border: 1px solid var(--border);
   border-radius: 999px;
-  color: #9ba8b3;
+  color: var(--muted);
   font-size: 9px;
   text-transform: uppercase;
 }
@@ -229,7 +229,7 @@
 
 .intel-stats div {
   padding: 8px;
-  background: #101820;
+  background: var(--field);
   border-radius: 6px;
 }
 
@@ -245,7 +245,7 @@
 
 .evidence-group h3 {
   margin: 0 0 8px;
-  color: #9ba8b3;
+  color: var(--muted);
   text-transform: capitalize;
 }
 
@@ -255,8 +255,8 @@
 }
 
 .evidence-item {
-  background: #0d141b;
-  border: 1px solid #202e39;
+  background: var(--field);
+  border: 1px solid var(--border);
   border-radius: 7px;
 }
 
@@ -269,13 +269,13 @@
 }
 
 .evidence-item summary span {
-  color: #9ba8b3;
+  color: var(--muted);
   font-size: 11px;
   text-transform: capitalize;
 }
 
 .evidence-confidence {
-  color: #6f7d89 !important;
+  color: var(--muted) !important;
 }
 
 .evidence-item pre {
@@ -284,9 +284,9 @@
   padding: 12px;
   overflow: auto;
   white-space: pre-wrap;
-  background: #0a1016;
-  color: #bac5ce;
-  border-top: 1px solid #202e39;
+  background: var(--field);
+  color: var(--text);
+  border-top: 1px solid var(--border);
   font-size: 10px;
   line-height: 1.5;
 }

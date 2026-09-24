@@ -5,7 +5,7 @@ from collections import defaultdict
 from app.persistence.config import (
     DatabaseOperationError,
 )
-from app.persistence.pool import get_pool
+from app.persistence.access import user_connection
 
 
 def _query_related(
@@ -337,34 +337,19 @@ def _load(
     *,
     investigation_id: int | None = None,
     limit: int = 10,
+    owner_id: str | None = None,
 ) -> list[dict]:
-    pool = get_pool()
-
     try:
-        with pool.connection() as connection:
+        with user_connection(owner_id) as connection:
             if investigation_id is not None:
                 rows = connection.execute(
-                    """
-                    SELECT *
-                    FROM investigations
-                    WHERE id = %s
-                    """,
-                    (investigation_id,),
+                    "SELECT * FROM investigations WHERE id = %s AND owner_id = %s::uuid",
+                    (investigation_id, owner_id),
                 ).fetchall()
             else:
                 rows = connection.execute(
-                    """
-                    SELECT *
-                    FROM investigations
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                    """,
-                    (
-                        max(
-                            1,
-                            min(limit, 100),
-                        ),
-                    ),
+                    "SELECT * FROM investigations WHERE owner_id = %s::uuid ORDER BY created_at DESC LIMIT %s",
+                    (owner_id, max(1, min(limit, 100))),
                 ).fetchall()
 
             ids = [
@@ -389,9 +374,10 @@ def _load(
 
 def get_investigation(
     investigation_id: int,
+    *, owner_id: str | None = None,
 ) -> dict | None:
     rows = _load(
-        investigation_id=investigation_id
+        investigation_id=investigation_id, owner_id=owner_id
     )
 
     return rows[0] if rows else None
@@ -399,5 +385,21 @@ def get_investigation(
 
 def get_investigations(
     limit: int = 10,
+    *, owner_id: str | None = None,
 ) -> list[dict]:
-    return _load(limit=limit)
+    return _load(limit=limit, owner_id=owner_id)
+
+
+def get_investigation_summaries(*, owner_id: str, limit: int = 100) -> list[dict]:
+    """Load bounded case previews without hydrating all private evidence."""
+    try:
+        with user_connection(owner_id) as connection:
+            return connection.execute(
+                """SELECT id, input_type, left(content, 160) AS content_preview,
+                          threat_score, verdict, created_at
+                   FROM investigations WHERE owner_id = %s::uuid
+                   ORDER BY created_at DESC, id DESC LIMIT %s""",
+                (owner_id, max(1, min(limit, 100))),
+            ).fetchall()
+    except Exception as exc:
+        raise DatabaseOperationError("Could not read investigation history.") from exc

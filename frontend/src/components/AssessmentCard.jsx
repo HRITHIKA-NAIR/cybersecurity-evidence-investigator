@@ -34,7 +34,7 @@ function AssessmentCard({
 
       <div className="panel assessment-panel">
         <span className="eyebrow">
-          AI ASSESSMENT
+          ASSESSMENT
         </span>
 
         {result ? (

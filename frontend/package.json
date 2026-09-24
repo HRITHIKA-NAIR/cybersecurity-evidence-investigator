@@ -5,15 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/license-notices.mjs && vite build && node scripts/prepare-site.mjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser-check.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.117.0",
+    "lucide-react": "1.47.0",
+    "motion": "13.4.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
@@ -22,6 +28,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
+    "playwright": "1.58.2",
     "vite": "^8.3.0"
   }
 }

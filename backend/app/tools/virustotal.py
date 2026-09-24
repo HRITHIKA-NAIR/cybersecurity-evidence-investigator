@@ -19,13 +19,12 @@ def _lookup(resource: str, value: str, key: str):
         key: value,
     }
 
-    if not API_KEY:
+    if not API_KEY or os.getenv("ENABLE_VIRUSTOTAL", "false").lower() != "true":
         return None, {
             **base,
             "status": "unavailable",
             "message": (
-                "VirusTotal API key "
-                "is not configured"
+                "VirusTotal lookup is disabled or not configured"
             ),
         }
 

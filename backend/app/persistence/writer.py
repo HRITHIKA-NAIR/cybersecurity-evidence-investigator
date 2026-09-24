@@ -5,7 +5,7 @@ from psycopg.types.json import Jsonb
 from app.persistence.config import (
     DatabaseOperationError,
 )
-from app.persistence.pool import get_pool
+from app.persistence.access import user_connection
 from app.persistence.write_evidence import (
     insert_chain,
     insert_evidence,
@@ -47,15 +47,15 @@ def save_investigation(
     attack_chain=None,
     legacy_source_id=None,
     created_at=None,
+    owner_id=None,
 ):
-    pool = get_pool()
-
     try:
-        with pool.connection() as connection:
+        with user_connection(owner_id) as connection:
             with connection.transaction():
                 row = connection.execute(
                     """
                     INSERT INTO investigations (
+                        owner_id,
                         legacy_source_id,
                         input_type,
                         content,
@@ -71,13 +71,14 @@ def save_investigation(
                         created_at
                     )
                     VALUES (
-                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, %s, %s,
                         COALESCE(%s, NOW())
                     )
                     RETURNING id
                     """,
                     (
+                        owner_id,
                         legacy_source_id,
                         _input_type(file_info),
                         content,
@@ -172,11 +173,10 @@ def save_investigation(
 def save_challenge(
     investigation_id,
     challenge_result,
+    *, owner_id=None,
 ):
-    pool = get_pool()
-
     try:
-        with pool.connection() as connection:
+        with user_connection(owner_id) as connection:
             with connection.transaction():
                 connection.execute(
                     """

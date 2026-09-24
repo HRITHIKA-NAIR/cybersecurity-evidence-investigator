@@ -4,6 +4,7 @@ import argparse
 import json
 import sqlite3
 import sys
+from uuid import UUID
 from pathlib import Path
 
 BACKEND_ROOT = (
@@ -48,6 +49,7 @@ def _json_value(
 
 def migrate(
     sqlite_path: Path,
+    owner_id: str,
 ) -> tuple[int, int, int]:
     init_database()
 
@@ -133,6 +135,7 @@ def migrate(
                     ),
                     legacy_source_id=row["id"],
                     created_at=row["created_at"],
+                    owner_id=owner_id,
                 )
                 migrated += 1
 
@@ -155,6 +158,7 @@ def migrate(
                             save_challenge(
                                 new_id,
                                 challenge,
+                                owner_id=owner_id,
                             )
                         except DatabaseOperationError:
                             challenge_skipped += 1
@@ -186,6 +190,7 @@ def main():
         nargs="?",
         default="investigations.db",
     )
+    parser.add_argument("--owner-id", required=True, type=UUID, help="Verified owner UUID for this single-owner legacy database. Never assign a multi-user dump to one account.")
     args = parser.parse_args()
 
     path = Path(args.sqlite_path)
@@ -199,7 +204,7 @@ def main():
         migrated,
         skipped,
         challenge_skipped,
-    ) = migrate(path)
+    ) = migrate(path, str(args.owner_id))
 
     print(
         "Migration complete. "

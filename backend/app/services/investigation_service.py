@@ -85,6 +85,7 @@ def run_investigation(
     file_info: dict | None = None,
     email_analysis: dict | None = None,
     file_analysis: dict | None = None,
+    *, owner_id: str | None = None,
 ) -> dict:
     indicators = extract_indicators(
         content
@@ -184,6 +185,7 @@ def run_investigation(
             evidence_items=evidence_items,
             attack_findings=attack_findings,
             attack_chain=attack_chain,
+            owner_id=owner_id,
         )
     except DatabaseOperationError:
         persistence = {

@@ -67,6 +67,18 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Test public configuration guards
+        working-directory: frontend
+        run: npm test
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Install browser for interface checks
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Test interface states and accessibility
+        working-directory: frontend
+        run: npm run test:browser

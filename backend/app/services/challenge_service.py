@@ -12,9 +12,10 @@ from app.tools.ai_analysis import (
 
 def run_challenge(
     investigation_id: int,
+    *, owner_id: str | None = None,
 ) -> dict | None:
     investigation = get_investigation(
-        investigation_id
+        investigation_id, owner_id=owner_id
     )
 
     if not investigation:
@@ -64,6 +65,7 @@ def run_challenge(
         save_challenge(
             investigation_id,
             result,
+            owner_id=owner_id,
         )
         result["persistence"] = {
             "status": "saved",

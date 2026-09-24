@@ -1,12 +1,12 @@
 # Cybersecurity Evidence Investigator
 
-**EVIDENCE — Evidence before verdict.**
+**EVIDENCE — Clarity before action.**
 
-Cybersecurity Evidence Investigator is an evidence-first web application for investigating suspicious text, URLs, emails and uploaded artifacts. Deterministic parsers and detectors collect evidence first; threat-intelligence services and Gemini reason over that evidence afterward.
+Cybersecurity Evidence Investigator is an evidence-first web application for investigating suspicious text, URLs, emails and uploaded artifacts. Deterministic parsers and detectors collect evidence first. Optional threat-intelligence and Gemini integrations are disabled by default and require an eligibility and privacy review before use.
 
-## Version 2
+## Version 2.3
 
-Version 2 follows the approved SRS/SDD/TDD v2.1 baseline.
+Version 2.3 develops the competition prototype into an authenticated website. Follow [the database and deployment runbook](docs/DEPLOYMENT.md) for first setup and release gates. The implementation is locally tested; live Supabase, SMTP, deployment and Google submission remain unverified.
 
 ### Core capabilities
 
@@ -26,10 +26,10 @@ Version 2 follows the approved SRS/SDD/TDD v2.1 baseline.
 - Overall score, verdict, confidence and grounded reasoning
 - Challenge Conclusion adversarial review
 - PostgreSQL persistence with Supabase as the selected hosted provider
-- Latest-10 investigation history
+- Private history with up to 100 short previews and full details on selection
 - Responsive analyst dashboard
 
-## Live services
+## Deployment references
 
 Frontend:
 Use the Render static-site URL configured for the EVIDENCE frontend.
@@ -37,32 +37,18 @@ Use the Render static-site URL configured for the EVIDENCE frontend.
 Backend:
 https://cybersecurity-evidence-investigator.onrender.com
 
-OpenAPI:
-https://cybersecurity-evidence-investigator.onrender.com/docs
-
-The public services may not reflect the newest feature branch until the release deployment is completed.
+The backend address above is a historical deployment reference, not a verified v2.3 release. Production disables interactive OpenAPI documentation; `/docs` is development-only.
 
 ## Architecture
 
-```text
-React / Vite
-     |
-     | HTTPS / REST
-     v
-FastAPI orchestration
-     |
-     +-- ingestion + validation
-     +-- format parsers
-     +-- specialist detectors
-     +-- URL / redirect safety
-     +-- VirusTotal enrichment
-     +-- EvidenceItem normalization
-     +-- multi-label AttackFindings
-     +-- attack-chain builder
-     +-- Gemini evidence synthesis
-     |
-     v
-PostgreSQL / Supabase
+```mermaid
+flowchart TD
+    Browser[React interface] --> Auth[Supabase Auth]
+    Browser --> API[FastAPI identity and quotas]
+    API --> Analysis[Static parsers and detectors]
+    Analysis --> Optional[Optional external assessment]
+    API --> Database[PostgreSQL with RLS]
+    Analysis --> Database
 ```
 
 The backend intentionally uses explicit FastAPI orchestration. There is no LangGraph dependency and no RAG/vector database.
@@ -90,7 +76,7 @@ Unknown evidence is not treated as safe evidence.
 
 Uploaded artifacts are treated as untrusted.
 
-- Maximum upload size: 10 MB
+- Maximum upload size: 10 MiB
 - Extracted text is bounded
 - Archive item count, expanded size, compression ratio and inspection time are bounded
 - Nested email attachment analysis is count- and depth-limited
@@ -131,6 +117,9 @@ Create a root or backend `.env` with backend-only values:
 GEMINI_API_KEY=
 VIRUSTOTAL_API_KEY=
 FRONTEND_ORIGIN=http://localhost:5173
+APP_ENV=development
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 DATABASE_URL=postgresql://...
 DB_POOL_MIN=1
 DB_POOL_MAX=5
@@ -171,7 +160,7 @@ Never expose `DATABASE_URL`, Gemini keys or VirusTotal keys through `VITE_*` var
 
 Version 2 uses PostgreSQL for runtime persistence. SQLite is not used by the running V2 service.
 
-The application creates the v2.1 relational tables and indexes at startup when PostgreSQL is reachable.
+Development can initialize the schema at startup. Production never does: run `scripts/init_database.py` with an owner credential, provision a restricted runtime role, then deploy only the runtime connection. Follow the runbook for the complete sequence.
 
 An optional one-time legacy migration is available:
 
@@ -236,7 +225,7 @@ python smoke_test.py
 Remove-Item Env:EVIDENCE_BASE_URL
 ```
 
-This checks health, Swagger docs, text investigation, file investigation, history and Challenge Conclusion.
+The script prompts privately for a disposable account token and checks readiness, authentication, text/file investigation, history, review and cleanup. Add `--check-isolation` to test cross-account denial using a second confirmed account. It does not require production Swagger docs.
 
 ## API
 
@@ -245,9 +234,11 @@ See [docs/API.md](docs/API.md).
 Primary endpoints:
 
 - `GET /`
+- `GET /live`
 - `GET /health`
 - `GET /investigations`
 - `GET /investigations/{id}`
+- `DELETE /investigations/{id}`
 - `POST /investigate`
 - `POST /investigate-file`
 - `POST /challenge`
@@ -273,6 +264,8 @@ The UI discloses that:
 - raw uploaded files are not sent to VirusTotal by this workflow
 
 Users should avoid submitting confidential material unless they are authorized to process it through the configured external services.
+
+Authentication uses Supabase Auth and owner-filtered PostgreSQL history. The browser-visible Supabase publishable key is expected to be public; it is not a database password. RLS, revoked direct table grants, bearer validation and server-only provider/database secrets provide the protection. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) and [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md).
 
 ## Current limitations
 
@@ -303,8 +296,8 @@ Safe synthetic fixtures should be used for tests.
 
 ## Documentation baseline
 
-- SRS v2.1
-- SDD v2.1
-- TDD v2.1
+The maintained PRD, design, SRS, TDD, SDD and guides describe v2.3. Earlier competition and v2.1 material is historical context, not the current launch checklist.
 
-Implementation changes that realize the approved v2.1 requirements do not create a new documentation version.
+## Version 2.3 continuation
+
+The maintained update branch is `feature/investigator-v2.2`. Read [the repository audit](docs/REPOSITORY_AUDIT.md) for branch inventory and verified fixes, and [the deployment runbook](docs/DEPLOYMENT.md) for the exact database, account, test, hosting and Google Search Console steps. Product and engineering documents remain separate in `docs/v2.3_separate/`. Local tests do not replace the live two-account release check.

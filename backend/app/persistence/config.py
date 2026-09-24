@@ -10,7 +10,11 @@ from urllib.parse import (
 
 from dotenv import load_dotenv
 
-load_dotenv()
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(ROOT / "backend" / ".env")
+load_dotenv(ROOT / ".env")
 
 
 class DatabaseOperationError(RuntimeError):

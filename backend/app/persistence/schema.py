@@ -180,3 +180,61 @@ SCHEMA_STATEMENTS = [
         ON email_metadata (sender_domain)
     """,
 ]
+
+# Existing unowned records are quarantined: never attach them to the next person who signs in.
+SCHEMA_STATEMENTS += [
+    "ALTER TABLE investigations ADD COLUMN IF NOT EXISTS owner_id UUID",
+    "CREATE INDEX IF NOT EXISTS idx_investigations_owner ON investigations (owner_id, created_at DESC)",
+    "CREATE TABLE IF NOT EXISTS usage_budgets (bucket TEXT PRIMARY KEY, used INTEGER NOT NULL DEFAULT 0)",
+]
+PRIVATE_TABLES = (
+    "investigations", "artifacts", "evidence_items", "attack_findings",
+    "finding_evidence", "attack_chain_stages", "email_metadata", "redirect_hops",
+    "challenge_results", "usage_budgets",
+)
+for table in PRIVATE_TABLES:
+    SCHEMA_STATEMENTS += [
+        f"ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY",
+        f"REVOKE ALL ON public.{table} FROM PUBLIC",
+        f"""DO $$ BEGIN
+        IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
+            REVOKE ALL ON public.{table} FROM anon;
+        END IF;
+        IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN
+            REVOKE ALL ON public.{table} FROM authenticated;
+        END IF;
+        END $$""",
+    ]
+
+SCHEMA_STATEMENTS += ["""
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'evidence_app') THEN
+    CREATE ROLE evidence_app NOLOGIN NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'evidence_budget') THEN
+    CREATE ROLE evidence_budget NOLOGIN NOBYPASSRLS;
+  END IF;
+  EXECUTE format('GRANT evidence_app, evidence_budget TO %I', current_user);
+END $$
+""", "GRANT USAGE ON SCHEMA public TO evidence_app, evidence_budget"]
+OWNER = "owner_id = NULLIF(current_setting('app.user_id', true), '')::uuid"
+for table in PRIVATE_TABLES:
+    if table == "usage_budgets":
+        role, predicate = "evidence_budget", "true"
+    elif table == "investigations":
+        role, predicate = "evidence_app", OWNER
+    elif table == "finding_evidence":
+        role = "evidence_app"
+        predicate = """EXISTS (SELECT 1 FROM attack_findings f JOIN evidence_items e
+          ON e.investigation_id = f.investigation_id
+          WHERE f.id = finding_evidence.finding_id AND e.id = finding_evidence.evidence_item_id)"""
+    else:
+        role = "evidence_app"
+        predicate = f"EXISTS (SELECT 1 FROM investigations i WHERE i.id = {table}.investigation_id)"
+    SCHEMA_STATEMENTS += [
+        f"GRANT SELECT, INSERT, UPDATE, DELETE ON public.{table} TO {role}",
+        f"DROP POLICY IF EXISTS evidence_owner_access ON public.{table}",
+        f"CREATE POLICY evidence_owner_access ON public.{table} FOR ALL TO {role} USING ({predicate}) WITH CHECK ({predicate})",
+    ]
+for table in ("investigations", "artifacts", "evidence_items", "attack_findings", "attack_chain_stages", "redirect_hops"):
+    SCHEMA_STATEMENTS.append(f"GRANT USAGE, SELECT ON SEQUENCE public.{table}_id_seq TO evidence_app")

@@ -16,6 +16,11 @@ def test_text_request_rejects_empty_content():
         )
 
 
+def test_text_request_rejects_whitespace_only():
+    with pytest.raises(ValidationError):
+        InvestigationRequest(content=" \t\n ")
+
+
 def test_text_request_rejects_oversized_content():
     with pytest.raises(
         ValidationError

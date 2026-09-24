@@ -36,7 +36,7 @@ Server-side redirect checks:
 - strict timeouts
 - environment proxy inheritance disabled for untrusted URL checks
 
-The current implementation resolves and validates a target immediately before the HTTP client connects. DNS rebinding between validation and connection remains a residual limitation to address if the redirect checker is exposed to higher-risk untrusted workloads.
+The request connects to a validated IP address while preserving the original Host header and HTTPS SNI/certificate-hostname verification. This pins the connection target and prevents a second DNS lookup from substituting an internal address between validation and connect. Every redirect is checked again. This protection is covered by the SSRF regression suite; it is not a claim of complete network isolation.
 
 This is not an active vulnerability scanner.
 
@@ -69,3 +69,9 @@ V2 runtime persistence uses PostgreSQL. Supabase is the selected hosted provider
 ## Known limitations
 
 Static indicators do not establish runtime compromise. Dynamic malware behavior, active exploitation, deep steganography, guaranteed sender attribution and exact sender physical location remain out of scope.
+
+## Authentication and deployment caveats
+
+The API validates each token using Supabase Auth. Global sign-out revokes refresh sessions, but already-issued access tokens may remain valid until their expiry; this API does not check auth.sessions on every request. Configure a short practical token lifetime. Browser 401 handling clears private state and requires sign-in.
+
+Production readiness rejects database logins with superuser, BYPASSRLS, inheritance or application-table ownership. The public build validates its environment before compilation and scans emitted text for known secret values and credential patterns. This is defense in depth, not an exhaustive proof that no arbitrary secret could ever be committed.

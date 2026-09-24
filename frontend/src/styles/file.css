@@ -20,7 +20,7 @@
 
 .file-findings .finding-card li {
   margin-bottom: 5px;
-  color: #b8c2cb;
+  color: var(--text);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -28,10 +28,10 @@
 .file-clear {
   margin: 0;
   padding: 12px;
-  background: #0d141b;
-  border: 1px solid #22313d;
+  background: var(--field);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #8d9aa6;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -42,7 +42,7 @@
 
 .email-warnings {
   padding-top: 14px;
-  border-top: 1px solid #202e39;
+  border-top: 1px solid var(--border);
 }
 
 .email-warnings h3,

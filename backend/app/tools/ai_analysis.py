@@ -162,7 +162,7 @@ def analyze_evidence(
             "verdict": "Inconclusive",
             "confidence": 0,
             "reasoning": (
-                "Gemini API key is not configured."
+                "AI assessment is disabled or not configured."
             ),
             "insufficient_evidence": True,
         }
@@ -281,7 +281,7 @@ Evidence:
     except Exception as error:
         print(
             "Gemini analysis failed:",
-            error,
+            type(error).__name__,
         )
 
         return {
@@ -334,8 +334,7 @@ def challenge_assessment(
                 "Challenge review was unavailable."
             ],
             "reasoning": (
-                "Gemini API key is not "
-                "configured."
+                "AI review is disabled or not configured."
             ),
             "conclusion_changed": False,
         }
@@ -425,7 +424,7 @@ Evidence and original assessment:
     except Exception as error:
         print(
             "Challenge analysis failed:",
-            error,
+            type(error).__name__,
         )
 
         return {

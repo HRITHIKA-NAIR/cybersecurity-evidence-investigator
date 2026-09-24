@@ -5,10 +5,15 @@ __pycache__/
 
 # Environment variables
 .env
+.env.*
+!.env.example
+.venv/
+.pytest_cache/
 
 # Node
 node_modules/
 dist/
+test-results/
 
 # Database
 *.db
