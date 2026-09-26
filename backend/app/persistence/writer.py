@@ -6,6 +6,7 @@ from app.persistence.config import (
     DatabaseOperationError,
 )
 from app.persistence.pool import get_pool
+from app.persistence.session import set_rls_user
 from app.persistence.write_evidence import (
     insert_chain,
     insert_evidence,
@@ -39,6 +40,7 @@ def save_investigation(
     threat_intelligence,
     ai_result,
     *,
+    user_id,
     file_info=None,
     email_analysis=None,
     file_analysis=None,
@@ -53,9 +55,12 @@ def save_investigation(
     try:
         with pool.connection() as connection:
             with connection.transaction():
+                set_rls_user(connection, user_id)
+
                 row = connection.execute(
                     """
                     INSERT INTO investigations (
+                        user_id,
                         legacy_source_id,
                         input_type,
                         content,
@@ -73,11 +78,12 @@ def save_investigation(
                     VALUES (
                         %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, %s, %s,
-                        COALESCE(%s, NOW())
+                        %s, COALESCE(%s, NOW())
                     )
                     RETURNING id
                     """,
                     (
+                        user_id,
                         legacy_source_id,
                         _input_type(file_info),
                         content,
@@ -172,12 +178,16 @@ def save_investigation(
 def save_challenge(
     investigation_id,
     challenge_result,
+    *,
+    user_id,
 ):
     pool = get_pool()
 
     try:
         with pool.connection() as connection:
             with connection.transaction():
+                set_rls_user(connection, user_id)
+
                 connection.execute(
                     """
                     INSERT INTO challenge_results (

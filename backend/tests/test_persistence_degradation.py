@@ -52,7 +52,8 @@ def test_investigation_survives_database_write_failure(
 
     result = (
         investigation_service.run_investigation(
-            "Urgent account verification."
+            "Urgent account verification.",
+            user_id=1,
         )
     )
 

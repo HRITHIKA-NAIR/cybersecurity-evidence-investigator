@@ -66,7 +66,8 @@ def test_investigation_returns_structured_v2_outputs(
                 "Urgent: verify your account at "
                 "https://example.test and enter "
                 "your password."
-            )
+            ),
+            user_id=1,
         )
     )
 

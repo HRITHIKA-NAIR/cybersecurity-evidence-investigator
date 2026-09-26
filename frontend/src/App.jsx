@@ -3,6 +3,7 @@ import { useState } from "react";
 import AssessmentCard from "./components/AssessmentCard";
 import AttackChain from "./components/AttackChain";
 import AttackFindings from "./components/AttackFindings";
+import AuthScreen from "./components/AuthScreen";
 import CaseSummary from "./components/CaseSummary";
 import ChallengePanel from "./components/ChallengePanel";
 import EmailIntelligence from "./components/EmailIntelligence";
@@ -13,7 +14,9 @@ import InvestigationInput from "./components/InvestigationInput";
 import InvestigationProgress from "./components/InvestigationProgress";
 import ThreatIntelligence from "./components/ThreatIntelligence";
 import URLIntelligence from "./components/URLIntelligence";
+import { useAuth } from "./context/useAuth";
 import {
+  AuthError,
   challengeInvestigation,
   getInvestigations,
   investigateFile,
@@ -25,6 +28,7 @@ const SUPPORTED_FILES =
   ".txt,.md,.csv,.json,.eml,.pdf,.docx,.docm,.pptx,.pptm,.xlsx,.xlsm,.html,.htm,.svg,.js,.ps1,.vbs,.bat,.cmd,.lnk,.iso,.zip,.7z,.png,.jpg,.jpeg,.gif,.bmp,.webp";
 
 function App() {
+  const { isAuthenticated, user, logout } = useAuth();
   const [content, setContent] = useState("");
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
@@ -44,12 +48,20 @@ function App() {
     setHistoryOpen,
   ] = useState(false);
 
+  if (!isAuthenticated) {
+    return <AuthScreen />;
+  }
+
   const loadHistory = async () => {
     try {
       const data =
         await getInvestigations();
       setHistory(data.slice(0, 10));
-    } catch {
+    } catch (requestError) {
+      if (requestError instanceof AuthError) {
+        logout();
+        return;
+      }
       setHistory([]);
     }
   };
@@ -98,6 +110,10 @@ function App() {
       setResult(data);
       await loadHistory();
     } catch (requestError) {
+      if (requestError instanceof AuthError) {
+        logout();
+        return;
+      }
       setError(
         requestError.message ||
           "Could not connect to the investigation service."
@@ -124,6 +140,10 @@ function App() {
       setChallengeResult(data);
       await loadHistory();
     } catch (requestError) {
+      if (requestError instanceof AuthError) {
+        logout();
+        return;
+      }
       setError(
         requestError.message ||
           "Could not challenge the current conclusion."
@@ -149,6 +169,28 @@ function App() {
         <div className="status">
           <span className="status-dot" />
           SYSTEM READY
+          {user?.email && (
+            <>
+              <span
+                style={{
+                  color: "#66727e",
+                  margin: "0 4px",
+                }}
+              >
+                &middot;
+              </span>
+              <span style={{ color: "#8d9aa6" }}>
+                {user.email}
+              </span>
+            </>
+          )}
+          <button
+            type="button"
+            className="logout-button"
+            onClick={logout}
+          >
+            Sign out
+          </button>
         </div>
       </header>
 

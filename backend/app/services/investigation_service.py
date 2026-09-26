@@ -85,6 +85,8 @@ def run_investigation(
     file_info: dict | None = None,
     email_analysis: dict | None = None,
     file_analysis: dict | None = None,
+    *,
+    user_id: int,
 ) -> dict:
     indicators = extract_indicators(
         content
@@ -178,6 +180,7 @@ def run_investigation(
             url_results,
             threat_results,
             ai_result,
+            user_id=user_id,
             file_info=file_info,
             email_analysis=email_analysis,
             file_analysis=file_analysis,

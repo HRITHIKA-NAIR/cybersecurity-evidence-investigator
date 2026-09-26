@@ -6,6 +6,7 @@ from app.persistence.config import (
     DatabaseOperationError,
 )
 from app.persistence.pool import get_pool
+from app.persistence.session import set_rls_user
 
 
 def _query_related(
@@ -335,6 +336,7 @@ def _hydrate(
 
 def _load(
     *,
+    user_id: int,
     investigation_id: int | None = None,
     limit: int = 10,
 ) -> list[dict]:
@@ -342,39 +344,42 @@ def _load(
 
     try:
         with pool.connection() as connection:
-            if investigation_id is not None:
-                rows = connection.execute(
-                    """
-                    SELECT *
-                    FROM investigations
-                    WHERE id = %s
-                    """,
-                    (investigation_id,),
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    """
-                    SELECT *
-                    FROM investigations
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                    """,
-                    (
-                        max(
-                            1,
-                            min(limit, 100),
-                        ),
-                    ),
-                ).fetchall()
+            with connection.transaction():
+                set_rls_user(connection, user_id)
 
-            ids = [
-                row["id"]
-                for row in rows
-            ]
-            related = _query_related(
-                connection,
-                ids,
-            )
+                if investigation_id is not None:
+                    rows = connection.execute(
+                        """
+                        SELECT *
+                        FROM investigations
+                        WHERE id = %s
+                        """,
+                        (investigation_id,),
+                    ).fetchall()
+                else:
+                    rows = connection.execute(
+                        """
+                        SELECT *
+                        FROM investigations
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                        """,
+                        (
+                            max(
+                                1,
+                                min(limit, 100),
+                            ),
+                        ),
+                    ).fetchall()
+
+                ids = [
+                    row["id"]
+                    for row in rows
+                ]
+                related = _query_related(
+                    connection,
+                    ids,
+                )
 
         return _hydrate(
             rows,
@@ -389,15 +394,23 @@ def _load(
 
 def get_investigation(
     investigation_id: int,
+    *,
+    user_id: int,
 ) -> dict | None:
     rows = _load(
-        investigation_id=investigation_id
+        user_id=user_id,
+        investigation_id=investigation_id,
     )
 
     return rows[0] if rows else None
 
 
 def get_investigations(
+    *,
+    user_id: int,
     limit: int = 10,
 ) -> list[dict]:
-    return _load(limit=limit)
+    return _load(
+        user_id=user_id,
+        limit=limit,
+    )

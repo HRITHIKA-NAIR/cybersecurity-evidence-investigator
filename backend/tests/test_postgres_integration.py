@@ -10,6 +10,7 @@ from app.database import (
     save_investigation,
 )
 from app.persistence.pool import get_pool
+from app.persistence.users import create_user
 
 
 pytestmark = pytest.mark.skipif(
@@ -24,6 +25,12 @@ pytestmark = pytest.mark.skipif(
 def test_postgres_round_trip():
     init_database()
     token = str(uuid.uuid4())
+
+    test_user = create_user(
+        f"integration-{token}@test.local",
+        "not-a-real-hash",
+    )
+    user_id = test_user["id"]
 
     investigation_id = save_investigation(
         "integration " + token,
@@ -41,6 +48,7 @@ def test_postgres_round_trip():
             "reasoning": "integration test",
             "insufficient_evidence": False,
         },
+        user_id=user_id,
         evidence_items=[
             {
                 "id": "ev-0001",
@@ -96,10 +104,12 @@ def test_postgres_round_trip():
                 "reasoning": "integration challenge",
                 "conclusion_changed": False,
             },
+            user_id=user_id,
         )
 
         stored = get_investigation(
-            investigation_id
+            investigation_id,
+            user_id=user_id,
         )
 
         assert stored is not None
@@ -125,14 +135,20 @@ def test_postgres_round_trip():
             == 60
         )
     finally:
+        # Deleting the user (a table with no RLS) cascades to the
+        # investigation and every child row via ON DELETE CASCADE, so
+        # there is no need to delete investigations directly - and a
+        # direct DELETE on investigations from a connection with no RLS
+        # context set would delete nothing anyway, now that RLS is
+        # enforced.
         pool = get_pool()
 
         with pool.connection() as connection:
             connection.execute(
                 """
-                DELETE FROM investigations
+                DELETE FROM users
                 WHERE id = %s
                 """,
-                (investigation_id,),
+                (user_id,),
             )
             connection.commit()

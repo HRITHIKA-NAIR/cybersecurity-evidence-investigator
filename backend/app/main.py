@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import (
+    Depends,
     FastAPI,
     File,
     HTTPException,
@@ -21,6 +22,18 @@ from starlette.concurrency import (
     run_in_threadpool,
 )
 
+from app.auth.dependencies import (
+    CurrentUser,
+    get_current_user,
+)
+from app.auth.security import AuthConfigurationError
+from app.auth.service import (
+    InvalidCredentialsError,
+    InvalidEmailError,
+    WeakPasswordError,
+    login as auth_login,
+    register as auth_register,
+)
 from app.database import (
     DatabaseOperationError,
     close_database,
@@ -33,6 +46,9 @@ from app.parsers.file_reader import (
     FileReaderError,
     MAX_UPLOAD_BYTES,
     read_uploaded_file,
+)
+from app.persistence.users import (
+    EmailAlreadyRegisteredError,
 )
 from app.services.challenge_service import (
     run_challenge,
@@ -140,6 +156,92 @@ class ChallengeRequest(BaseModel):
     investigation_id: int
 
 
+class RegisterRequest(BaseModel):
+    email: str = Field(max_length=320)
+    password: str = Field(
+        min_length=8, max_length=72
+    )
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(max_length=320)
+    password: str = Field(
+        min_length=1, max_length=72
+    )
+
+
+def _auth_config_response():
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Authentication is not configured on the "
+            "server (missing JWT_SECRET)."
+        ),
+    )
+
+
+@app.post("/auth/register")
+@limiter.limit("5/minute;20/day")
+def register_route(
+    request: Request,
+    payload: RegisterRequest,
+):
+    try:
+        return auth_register(
+            payload.email, payload.password
+        )
+    except (
+        InvalidEmailError,
+        WeakPasswordError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422, detail=str(exc)
+        ) from exc
+    except EmailAlreadyRegisteredError as exc:
+        raise HTTPException(
+            status_code=409, detail=str(exc)
+        ) from exc
+    except AuthConfigurationError:
+        _auth_config_response()
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not create account right now.",
+        ) from exc
+
+
+@app.post("/auth/login")
+@limiter.limit("10/minute;50/day")
+def login_route(
+    request: Request,
+    payload: LoginRequest,
+):
+    try:
+        return auth_login(
+            payload.email, payload.password
+        )
+    except InvalidCredentialsError as exc:
+        raise HTTPException(
+            status_code=401, detail=str(exc)
+        ) from exc
+    except AuthConfigurationError:
+        _auth_config_response()
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not sign in right now.",
+        ) from exc
+
+
+@app.get("/auth/me")
+def me_route(
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
+):
+    return {"id": current_user.id}
+
+
 @app.get("/")
 def root():
     return {
@@ -172,9 +274,13 @@ def health():
 def investigate(
     request: Request,
     payload: InvestigationRequest,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
 ):
     return run_investigation(
-        payload.content
+        payload.content,
+        user_id=current_user.id,
     )
 
 
@@ -183,6 +289,9 @@ def investigate(
 async def investigate_file(
     request: Request,
     file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
 ):
     data = await file.read(
         MAX_UPLOAD_BYTES + 1
@@ -214,6 +323,7 @@ async def investigate_file(
         parsed.get(
             "file_analysis"
         ),
+        user_id=current_user.id,
     )
 
 
@@ -222,10 +332,14 @@ async def investigate_file(
 def challenge(
     request: Request,
     payload: ChallengeRequest,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
 ):
     try:
         result = run_challenge(
-            payload.investigation_id
+            payload.investigation_id,
+            user_id=current_user.id,
         )
     except DatabaseOperationError as exc:
         raise HTTPException(
@@ -252,10 +366,14 @@ def challenge(
 @limiter.limit("30/minute")
 def investigations(
     request: Request,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
 ):
     try:
         return get_investigations(
-            limit=10
+            user_id=current_user.id,
+            limit=10,
         )
     except DatabaseOperationError as exc:
         raise HTTPException(
@@ -272,10 +390,14 @@ def investigations(
 def investigation_detail(
     investigation_id: int,
     request: Request,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
 ):
     try:
         result = get_investigation(
-            investigation_id
+            investigation_id,
+            user_id=current_user.id,
         )
     except DatabaseOperationError as exc:
         raise HTTPException(
