@@ -1,0 +1,53 @@
+.file-findings .finding-card {
+  padding: 13px;
+}
+
+.finding-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.finding-topline strong {
+  font-size: 13px;
+}
+
+.file-findings .finding-card ul {
+  margin: 9px 0 0;
+  padding-left: 18px;
+}
+
+.file-findings .finding-card li {
+  margin-bottom: 5px;
+  color: #b8c2cb;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.file-clear {
+  margin: 0;
+  padding: 12px;
+  background: #0d141b;
+  border: 1px solid #22313d;
+  border-radius: 8px;
+  color: #8d9aa6;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.email-heading {
+  margin-bottom: 16px;
+}
+
+.email-warnings {
+  padding-top: 14px;
+  border-top: 1px solid #202e39;
+}
+
+.email-warnings h3,
+.file-findings h3,
+.file-urls h3,
+.url-section h3 {
+  margin: 0 0 10px;
+}

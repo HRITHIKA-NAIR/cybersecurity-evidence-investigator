@@ -1,21 +1,91 @@
+import logging
 import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
-from app.tools.indicators import extract_indicators
-from app.tools.url_analysis import analyze_url
-from app.tools.virustotal import check_domain
-from app.tools.ai_analysis import analyze_evidence
-from app.tools.ai_analysis import (analyze_evidence,challenge_assessment,)
-from app.database import (get_investigations,init_db,save_challenge,save_investigation,)
-from pydantic import BaseModel
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from starlette.concurrency import (
+    run_in_threadpool,
+)
 
-app = FastAPI(title="Cybersecurity Evidence Investigator")
-init_db()
+from app.auth.dependencies import (
+    CurrentUser,
+    get_current_user,
+)
+from app.auth.security import AuthConfigurationError
+from app.auth.service import (
+    InvalidCredentialsError,
+    InvalidEmailError,
+    WeakPasswordError,
+    login as auth_login,
+    register as auth_register,
+)
+from app.database import (
+    DatabaseOperationError,
+    close_database,
+    database_health,
+    get_investigation,
+    get_investigations,
+    init_database,
+)
+from app.parsers.file_reader import (
+    FileReaderError,
+    MAX_UPLOAD_BYTES,
+    read_uploaded_file,
+)
+from app.persistence.users import (
+    EmailAlreadyRegisteredError,
+)
+from app.services.challenge_service import (
+    run_challenge,
+)
+from app.services.investigation_service import (
+    run_investigation,
+)
 
-frontend_origin = os.getenv("FRONTEND_ORIGIN")
+LOGGER = logging.getLogger(__name__)
+MAX_TEXT_CHARS = 100_000
 
+
+@asynccontextmanager
+async def lifespan(_app):
+    try:
+        init_database()
+    except Exception as exc:
+        LOGGER.error(
+            "Database initialization failed: %s",
+            type(exc).__name__,
+        )
+
+    yield
+    close_database()
+
+
+app = FastAPI(
+    title=(
+        "Cybersecurity Evidence "
+        "Investigator"
+    ),
+    lifespan=lifespan,
+)
+
+frontend_origin = os.getenv(
+    "FRONTEND_ORIGIN"
+)
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -34,123 +104,314 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def _client_key(request: Request) -> str:
+    """Rate-limit key derived from the caller's IP.
+
+    Render (and most PaaS hosts) sit the app behind a reverse proxy, so
+    ``request.client.host`` is the proxy's address, not the caller's. Render
+    sets ``X-Forwarded-For`` to "<client>, <proxy hops...>" - the first
+    entry is the original client.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+limiter = Limiter(
+    key_func=_client_key,
+    default_limits=["60/minute"],
+)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(RateLimitExceeded)
+def _rate_limit_handler(
+    _request: Request,
+    exc: RateLimitExceeded,
+):
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "detail": (
+                "Too many requests. Please wait "
+                "before trying again."
+            )
+        },
+    )
+    response.headers["Retry-After"] = "60"
+    return response
+
+
 class InvestigationRequest(BaseModel):
-    content: str
+    content: str = Field(
+        min_length=1,
+        max_length=MAX_TEXT_CHARS,
+    )
+
 
 class ChallengeRequest(BaseModel):
     investigation_id: int
-    content: str
-    indicators: dict
-    url_analysis: list
-    threat_intelligence: list
-    original_assessment: dict
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(max_length=320)
+    password: str = Field(
+        min_length=8, max_length=72
+    )
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(max_length=320)
+    password: str = Field(
+        min_length=1, max_length=72
+    )
+
+
+def _auth_config_response():
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Authentication is not configured on the "
+            "server (missing JWT_SECRET)."
+        ),
+    )
+
+
+@app.post("/auth/register")
+@limiter.limit("5/minute;20/day")
+def register_route(
+    request: Request,
+    payload: RegisterRequest,
+):
+    try:
+        return auth_register(
+            payload.email, payload.password
+        )
+    except (
+        InvalidEmailError,
+        WeakPasswordError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422, detail=str(exc)
+        ) from exc
+    except EmailAlreadyRegisteredError as exc:
+        raise HTTPException(
+            status_code=409, detail=str(exc)
+        ) from exc
+    except AuthConfigurationError:
+        _auth_config_response()
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not create account right now.",
+        ) from exc
+
+
+@app.post("/auth/login")
+@limiter.limit("10/minute;50/day")
+def login_route(
+    request: Request,
+    payload: LoginRequest,
+):
+    try:
+        return auth_login(
+            payload.email, payload.password
+        )
+    except InvalidCredentialsError as exc:
+        raise HTTPException(
+            status_code=401, detail=str(exc)
+        ) from exc
+    except AuthConfigurationError:
+        _auth_config_response()
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not sign in right now.",
+        ) from exc
+
+
+@app.get("/auth/me")
+def me_route(
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
+):
+    return {"id": current_user.id}
 
 
 @app.get("/")
 def root():
-    return {"message": "Cybersecurity Evidence Investigator API is running"}
+    return {
+        "message": (
+            "Cybersecurity Evidence "
+            "Investigator API is running"
+        )
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    if not database_health():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Service is running, but "
+                "PostgreSQL is unavailable."
+            ),
+        )
+
+    return {
+        "status": "ok",
+        "database": "ok",
+    }
 
 
 @app.post("/investigate")
-def investigate(request: InvestigationRequest):
-    indicators = extract_indicators(request.content)
-
-    url_results = [
-        analyze_url(url)
-        for url in indicators["urls"]
-    ]
-
-    domain_results = [
-        check_domain(domain)
-        for domain in indicators["domains"]
-    ]
-
-    evidence = [
-        f"Extracted {len(indicators['urls'])} URL(s)",
-        f"Extracted {len(indicators['domains'])} domain(s)",
-        f"Extracted {len(indicators['emails'])} email address(es)",
-    ]
-
-    for result in url_results:
-        for finding in result["findings"]:
-            evidence.append(finding["message"])
-
-    for result in domain_results:
-        if result["status"] == "success":
-            evidence.append(
-                f"VirusTotal: {result['malicious']} malicious, "
-                f"{result['suspicious']} suspicious detections for "
-                f"{result['domain']}"
-            )
-        else:
-            evidence.append(
-                f"VirusTotal: "
-                f"{result.get('message', 'No result')} "
-                f"for {result['domain']}"
-            )
-
-    ai_result = analyze_evidence(
-        request.content,
-        indicators,
-        url_results,
-        domain_results,
+@limiter.limit("5/minute;60/day")
+def investigate(
+    request: Request,
+    payload: InvestigationRequest,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
+):
+    return run_investigation(
+        payload.content,
+        user_id=current_user.id,
     )
 
-    investigation_id = save_investigation(
-        request.content,
-        indicators,
-        url_results,
-        domain_results,
-        ai_result,
+
+@app.post("/investigate-file")
+@limiter.limit("5/minute;60/day")
+async def investigate_file(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
+):
+    data = await file.read(
+        MAX_UPLOAD_BYTES + 1
+    )
+    await file.close()
+
+    try:
+        parsed = await run_in_threadpool(
+            read_uploaded_file,
+            file.filename or "upload",
+            file.content_type,
+            data,
+        )
+    except FileReaderError as exc:
+        raise HTTPException(
+            status_code=(
+                exc.status_code
+            ),
+            detail=str(exc),
+        ) from exc
+
+    return await run_in_threadpool(
+        run_investigation,
+        parsed["content"],
+        parsed["file_info"],
+        parsed.get(
+            "email_analysis"
+        ),
+        parsed.get(
+            "file_analysis"
+        ),
+        user_id=current_user.id,
     )
 
-    return {
-        "status": "completed",
-        "investigation_id": investigation_id,
-        "indicators": indicators,
-        "url_analysis": url_results,
-        "threat_intelligence": domain_results,
-        "threat_score": ai_result["threat_score"],
-        "verdict": ai_result["verdict"],
-        "confidence": ai_result["confidence"],
-        "reasoning": ai_result["reasoning"],
-        "insufficient_evidence": ai_result[
-            "insufficient_evidence"
-        ],
-        "evidence": evidence,
-        "stages": {
-            "extract_indicators": True,
-            "analyze_url": True,
-            "investigate_domain": True,
-            "gather_evidence": True,
-            "counter_evidence": False,
-            "calculate_assessment":
-                ai_result["status"] == "success",
-        },
-    }
 
 @app.post("/challenge")
-def challenge(request: ChallengeRequest):
-    result = challenge_assessment(
-        request.content,
-        request.indicators,
-        request.url_analysis,
-        request.threat_intelligence,
-        request.original_assessment,
-    )
+@limiter.limit("10/minute;100/day")
+def challenge(
+    request: Request,
+    payload: ChallengeRequest,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
+):
+    try:
+        result = run_challenge(
+            payload.investigation_id,
+            user_id=current_user.id,
+        )
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Challenge is temporarily "
+                "unavailable because persistent "
+                "history cannot be reached."
+            ),
+        ) from exc
 
-    save_challenge(
-        request.investigation_id,
-        result,
-    )
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Investigation not found."
+            ),
+        )
 
     return result
 
+
 @app.get("/investigations")
-def investigations():
-    return get_investigations(limit=10)
+@limiter.limit("30/minute")
+def investigations(
+    request: Request,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
+):
+    try:
+        return get_investigations(
+            user_id=current_user.id,
+            limit=10,
+        )
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Investigation history is "
+                "temporarily unavailable."
+            ),
+        ) from exc
+
+
+@app.get("/investigations/{investigation_id}")
+@limiter.limit("30/minute")
+def investigation_detail(
+    investigation_id: int,
+    request: Request,
+    current_user: CurrentUser = Depends(
+        get_current_user
+    ),
+):
+    try:
+        result = get_investigation(
+            investigation_id,
+            user_id=current_user.id,
+        )
+    except DatabaseOperationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Investigation history is "
+                "temporarily unavailable."
+            ),
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Investigation not found.",
+        )
+
+    return result

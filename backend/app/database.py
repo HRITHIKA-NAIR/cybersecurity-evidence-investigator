@@ -1,130 +1,29 @@
-import json
-import sqlite3
-from pathlib import Path
+from app.persistence.config import (
+    DatabaseConfigurationError,
+    DatabaseOperationError,
+)
+from app.persistence.pool import (
+    close_database,
+    database_health,
+    init_database,
+)
+from app.persistence.reader import (
+    get_investigation,
+    get_investigations,
+)
+from app.persistence.writer import (
+    save_challenge,
+    save_investigation,
+)
 
-DB_PATH = Path(__file__).resolve().parent.parent / "investigations.db"
-
-
-def get_connection():
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    return connection
-
-
-def init_db():
-    with get_connection() as connection:
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS investigations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT NOT NULL,
-                indicators TEXT NOT NULL,
-                url_analysis TEXT NOT NULL,
-                threat_intelligence TEXT NOT NULL,
-                threat_score INTEGER NOT NULL,
-                verdict TEXT NOT NULL,
-                confidence INTEGER NOT NULL,
-                reasoning TEXT NOT NULL,
-                insufficient_evidence INTEGER NOT NULL,
-                challenge_result TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-
-
-def save_investigation(
-    content,
-    indicators,
-    url_analysis,
-    threat_intelligence,
-    ai_result,
-):
-    with get_connection() as connection:
-        cursor = connection.execute(
-            """
-            INSERT INTO investigations (
-                content,
-                indicators,
-                url_analysis,
-                threat_intelligence,
-                threat_score,
-                verdict,
-                confidence,
-                reasoning,
-                insufficient_evidence
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                content,
-                json.dumps(indicators),
-                json.dumps(url_analysis),
-                json.dumps(threat_intelligence),
-                ai_result["threat_score"],
-                ai_result["verdict"],
-                ai_result["confidence"],
-                ai_result["reasoning"],
-                int(ai_result["insufficient_evidence"]),
-            ),
-        )
-
-        return cursor.lastrowid
-
-
-def save_challenge(investigation_id, challenge_result):
-    with get_connection() as connection:
-        connection.execute(
-            """
-            UPDATE investigations
-            SET challenge_result = ?
-            WHERE id = ?
-            """,
-            (
-                json.dumps(challenge_result),
-                investigation_id,
-            ),
-        )
-
-
-def get_investigations(limit=10):
-    with get_connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT *
-            FROM investigations
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
-
-    investigations = []
-
-    for row in rows:
-        investigation = dict(row)
-
-        investigation["indicators"] = json.loads(
-            investigation["indicators"]
-        )
-
-        investigation["url_analysis"] = json.loads(
-            investigation["url_analysis"]
-        )
-
-        investigation["threat_intelligence"] = json.loads(
-            investigation["threat_intelligence"]
-        )
-
-        if investigation["challenge_result"]:
-            investigation["challenge_result"] = json.loads(
-                investigation["challenge_result"]
-            )
-
-        investigation["insufficient_evidence"] = bool(
-            investigation["insufficient_evidence"]
-        )
-
-        investigations.append(investigation)
-
-    return investigations
+__all__ = [
+    "DatabaseConfigurationError",
+    "DatabaseOperationError",
+    "close_database",
+    "database_health",
+    "get_investigation",
+    "get_investigations",
+    "init_database",
+    "save_challenge",
+    "save_investigation",
+]
