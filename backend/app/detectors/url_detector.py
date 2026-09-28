@@ -39,7 +39,7 @@ def _apparent_subdomain_domain(
 ) -> str | None:
     labels = [label for label in subdomain.split(".") if label]
 
-    for index in range(len(labels) - 1):
+    for index in range(len(labels) - 1): 
         candidate = f"{labels[index]}.{labels[index + 1]}"
         extracted = _EXTRACT(candidate)
 
