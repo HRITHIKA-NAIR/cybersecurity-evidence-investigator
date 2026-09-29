@@ -18,6 +18,7 @@ const CaseResults = lazy(() => import('./components/CaseResults'));
 function App() {
   const [route, setRoute] = useState(readRoute);
   const [user, setUser] = useState(null);
+  const [sessionReady, setSessionReady] = useState(() => !supabase);
   const [accountOpen, setAccountOpen] = useState(false);
   const [recovery, setRecovery] = useState(false);
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem('evidence-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch { return 'light'; } });
@@ -58,6 +59,7 @@ function App() {
   useEffect(() => {
     if (!supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSessionReady(true);
       const nextUser = session?.user || null;
       if (identity.current !== nextUser?.id) {
         identity.current = nextUser?.id;
@@ -115,7 +117,7 @@ function App() {
     activeRequest.current = new AbortController();
     setBusy('analysis'); setSlow(false); setError(null); setResult(null); setChallenge(null); setResultContext(category.id);
     try {
-      const data = file ? await investigateFile(file, activeRequest.current.signal) : await investigateText(content, activeRequest.current.signal);
+      const data = file ? await investigateFile(file, activeRequest.current.signal) : await investigateText(content, activeRequest.current.signal, category.id);
       if (current === generation.current) { setResult(data); location.hash = 'case'; }
     } catch (err) { if (current === generation.current && err.name !== 'AbortError') report(err); }
     finally { if (current === generation.current) { setBusy(''); activeRequest.current = null; } }
@@ -144,6 +146,10 @@ function App() {
     finally { if (current === generation.current && !controller.signal.aborted) setBusy(''); }
   }
   const showResult = result && (route === 'case' || category?.id === resultContext);
+  if (!sessionReady) {
+    return <div className="app-boot"><ShieldLoader label="Loading EVIDENCE…" /></div>;
+  }
+
   return <LazyMotion features={domAnimation}><MotionConfig reducedMotion="user">
     <a className="skip-link" href="#main" onClick={e => { e.preventDefault(); document.getElementById('main').focus(); }}>Skip to main content</a>
     <div className="workspace">

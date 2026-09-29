@@ -42,14 +42,14 @@ export function getInvestigation(id, signal) {
   return requestJson(`/investigations/${id}`, { signal });
 }
 
-export function investigateText(content, signal) {
+export function investigateText(content, signal, category) {
   return requestJson("/investigate", {
     method: "POST",
     signal,
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, category }),
   });
 }
 

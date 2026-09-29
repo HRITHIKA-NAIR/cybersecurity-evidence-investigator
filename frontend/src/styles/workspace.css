@@ -135,3 +135,8 @@ code,pre { font-family:ui-monospace,Consolas,monospace; overflow-wrap:anywhere; 
 .url-finding.warning { color:#805000; }
 .url-finding.suspicious { color:var(--danger); }
 [data-theme="dark"] .url-finding.warning { color:#ffe0a0; }
+.app-boot { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
+.app-boot .shield-loading { margin-bottom:0; max-width:360px; }
+.overview-actions { margin:-4px 0 16px; }
+.recovery-cta { background:var(--soft); border:1px solid var(--border); color:var(--accent); font-weight:600; padding:9px 16px; border-radius:8px; cursor:pointer; }
+.recovery-cta:hover { border-color:var(--accent); }

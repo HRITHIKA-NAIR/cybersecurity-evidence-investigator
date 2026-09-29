@@ -4,6 +4,7 @@ from app.integrations.gemini import (
     available,
     generate_json,
 )
+from app.services.baseline_assessment import baseline_assessment
 from app.models import (
     AssessmentResult,
     ChallengeResult,
@@ -155,19 +156,23 @@ def analyze_evidence(
     attack_findings=None,
     attack_chain=None,
 ):
+    baseline = baseline_assessment(
+        indicators,
+        url_analysis,
+        threat_intelligence,
+        email_analysis,
+        file_analysis,
+        attack_findings or [],
+    )
+
     if not available():
-        return {
-            "status": "unavailable",
-            "threat_score": 0,
-            "verdict": "Inconclusive",
-            "confidence": 0,
-            "reasoning": (
-                "AI assessment is disabled or not configured."
-            ),
-            "insufficient_evidence": True,
-        }
+        return baseline
 
     evidence_bundle = {
+        "baseline_assessment": {
+            key: baseline[key]
+            for key in ("threat_score", "verdict", "confidence", "reasoning")
+        },
         "submitted_content": content,
         "indicators": indicators,
         "url_analysis": url_analysis,
@@ -207,7 +212,9 @@ Rules:
 - Claimed email identity and routing geography are not verified human identity/location.
 - Redirect failures/timeouts are not benign or malicious evidence by themselves.
 - Low Risk requires affirmative benign evidence and no meaningful suspicious evidence.
-- Prefer Inconclusive when evidence is absent, weak, or conflicting.
+- baseline_assessment is a deterministic rule-based result computed from the same evidence. Confirm, raise or lower it only with evidence-based reasons; do not ignore it.
+- Use Inconclusive only when no meaningful evidence was collected or the evidence conflicts. When a page was fetched and inspected, or reputation data was returned, give a real verdict and explain its limits instead of abstaining.
+- Look-alike domains (for example rnicrosoft.com for microsoft.com), cross-domain login forms, hidden links and impersonation findings are strong phishing indicators.
 - Threat score and confidence must be integers from 0 to 100.
 - Return JSON only.
 
@@ -250,6 +257,17 @@ Evidence:
         )
 
         if (
+            result.verdict == "Inconclusive"
+            and not no_evidence
+            and baseline["verdict"] != "Inconclusive"
+        ):
+            return {
+                "status": "success",
+                **baseline,
+                "status": "success",
+            }
+
+        if (
             no_evidence
             and result.verdict
             in {
@@ -284,19 +302,7 @@ Evidence:
             type(error).__name__,
         )
 
-        return {
-            "status": "error",
-            "threat_score": 0,
-            "verdict": "Inconclusive",
-            "confidence": 0,
-            "reasoning": (
-                "AI assessment is temporarily "
-                "unavailable. The collected "
-                "cybersecurity evidence remains "
-                "available."
-            ),
-            "insufficient_evidence": True,
-        }
+        return {**baseline, "status": "error"}
 
 
 def challenge_assessment(

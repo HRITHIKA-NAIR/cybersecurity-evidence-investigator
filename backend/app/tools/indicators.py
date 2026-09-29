@@ -20,7 +20,33 @@ def _bounded_unique(
     )
 
 
-def extract_indicators(content: str):
+_BARE_HOST = re.compile(
+    r"^(?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(?::\d{1,5})?(?:[/?#]\S*)?$",
+    re.I,
+)
+_WWW_TOKEN = re.compile(r"(?<![/@\w.])www\.[^\s<>\"']+", re.I)
+
+
+def _with_schemes(content: str, link_mode: bool) -> str:
+    """Give scheme-less addresses an https:// prefix so they are analysed.
+
+    In link mode every token that looks like host/path is treated as a URL
+    (people paste "microsoft.com"). Otherwise only www.-prefixed tokens are.
+    """
+    if link_mode:
+        tokens = []
+        for token in re.split(r"[\s,;]+", content.strip()):
+            trimmed = token.strip("()<>\"'")
+            if trimmed and "@" not in trimmed and not trimmed.lower().startswith(("http://", "https://")) and _BARE_HOST.match(trimmed):
+                tokens.append("https://" + trimmed)
+            else:
+                tokens.append(token)
+        return " ".join(tokens)
+    return _WWW_TOKEN.sub(lambda m: "https://" + m.group(0), content)
+
+
+def extract_indicators(content: str, *, link_mode: bool = False):
+    content = _with_schemes(content, link_mode)
     urls, urls_truncated = (
         _bounded_unique(
             re.findall(

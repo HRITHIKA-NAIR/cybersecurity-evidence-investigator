@@ -27,9 +27,45 @@ from app.services.threat_service import (
     gather_threat_intelligence,
 )
 from app.tools.ai_analysis import analyze_evidence
+from app.detectors.lookalike import check_hostname
 from app.tools.indicators import extract_indicators
 from app.tools.url_investigation import investigate_url
 from app.tools.virustotal import check_ip
+
+
+MAX_PAGE_INSPECTIONS = 3
+
+
+def _email_domain_results(indicators: dict, url_results: list[dict]) -> list[dict]:
+    """Look-alike check for sender/recipient domains that are not URLs."""
+    covered = {result.get("hostname") for result in url_results}
+    extra = []
+    for address in indicators.get("emails", []):
+        domain = address.rsplit("@", 1)[1].lower()
+        if domain in covered:
+            continue
+        covered.add(domain)
+        findings = check_hostname(domain)
+        if findings:
+            extra.append({
+                "url": f"email address {address}",
+                "normalized_url": None,
+                "hostname": domain,
+                "scheme": "",
+                "registered_domain": domain,
+                "subdomain": "",
+                "findings": [
+                    {"type": item["type"], "message": f"Email domain: {item['message']}"}
+                    for item in findings
+                ],
+                "redirect_analysis": {
+                    "status": "not_applicable",
+                    "reason": "Email addresses are not visited.",
+                    "hops": [],
+                    "redirect_count": 0,
+                },
+            })
+    return extra
 
 
 def _merge_file_indicators(
@@ -86,9 +122,11 @@ def run_investigation(
     email_analysis: dict | None = None,
     file_analysis: dict | None = None,
     *, owner_id: str | None = None,
+    category: str | None = None,
 ) -> dict:
     indicators = extract_indicators(
-        content
+        content,
+        link_mode=category == "link",
     )
     _merge_file_indicators(
         indicators,
@@ -97,8 +135,11 @@ def run_investigation(
 
     url_results = [
         investigate_url(url)
-        for url in indicators["urls"]
+        if index < MAX_PAGE_INSPECTIONS
+        else investigate_url(url, inspect=False)
+        for index, url in enumerate(indicators["urls"])
     ]
+    url_results.extend(_email_domain_results(indicators, url_results))
 
     threat_results = (
         gather_threat_intelligence(

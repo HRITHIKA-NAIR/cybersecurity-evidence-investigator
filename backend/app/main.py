@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Literal
 from contextlib import asynccontextmanager
 
 from fastapi import (
@@ -101,6 +102,7 @@ class InvestigationRequest(BaseModel):
         min_length=1,
         max_length=MAX_TEXT_CHARS,
     )
+    category: Literal["link", "email", "message"] | None = None
 
     @field_validator("content")
     @classmethod
@@ -148,7 +150,9 @@ def investigate(
 ):
     reserve_budget(owner_id)
     return run_investigation(
-        request.content, owner_id=owner_id
+        request.content,
+        owner_id=owner_id,
+        category=request.category,
     )
 
 

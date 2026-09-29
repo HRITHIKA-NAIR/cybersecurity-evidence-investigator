@@ -490,3 +490,150 @@ def safe_follow(url: str) -> dict:
             len(hops) - 1,
         ),
     }
+
+
+MAX_PAGE_BYTES = 300_000
+_PAGE_TYPES = ("text/html", "application/xhtml")
+
+
+def _fetch_body_once(
+    url: str,
+    addresses: list[str],
+    max_bytes: int,
+) -> dict:
+    """GET one URL through a pinned, validated address and read a bounded body."""
+    parsed = urlsplit(url)
+    hostname = parsed.hostname
+
+    if not hostname:
+        raise PinnedRequestError("URL does not contain a hostname.")
+
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    target = parsed.path or "/"
+    if parsed.query:
+        target += "?" + parsed.query
+
+    host_header = _host_header(hostname, port, parsed.scheme)
+    timeout = urllib3.Timeout(connect=3.0, read=6.0)
+    last_error = None
+
+    for address in addresses:
+        pool = None
+        try:
+            if parsed.scheme == "https":
+                pool = urllib3.HTTPSConnectionPool(
+                    address,
+                    port=port,
+                    timeout=timeout,
+                    maxsize=1,
+                    block=True,
+                    cert_reqs="CERT_REQUIRED",
+                    ca_certs=certifi.where(),
+                    assert_hostname=hostname,
+                    server_hostname=hostname,
+                )
+            else:
+                pool = urllib3.HTTPConnectionPool(
+                    address, port=port, timeout=timeout, maxsize=1, block=True
+                )
+
+            response = pool.request(
+                "GET",
+                target,
+                headers={
+                    "Host": host_header,
+                    "User-Agent": "Cybersecurity-Evidence-Investigator/2",
+                    "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
+                },
+                redirect=False,
+                retries=False,
+                preload_content=False,
+            )
+            try:
+                content_type = (response.headers.get("content-type") or "").lower()
+                location = response.headers.get("location")
+                body = b""
+                truncated = False
+
+                if response.status not in REDIRECT_CODES and content_type.startswith(_PAGE_TYPES):
+                    for chunk in response.stream(16_384, decode_content=True):
+                        body += chunk
+                        if len(body) >= max_bytes:
+                            body = body[:max_bytes]
+                            truncated = True
+                            break
+
+                return {
+                    "status_code": response.status,
+                    "location": location,
+                    "content_type": content_type,
+                    "body": body,
+                    "truncated": truncated,
+                }
+            finally:
+                response.close()
+
+        except urllib3.exceptions.TimeoutError as exc:
+            last_error = PinnedTimeoutError("URL request timed out.")
+            last_error.__cause__ = exc
+        except (urllib3.exceptions.HTTPError, OSError, ValueError) as exc:
+            last_error = PinnedRequestError("Could not connect to the URL.")
+            last_error.__cause__ = exc
+        finally:
+            if pool is not None:
+                pool.close()
+
+    if last_error:
+        raise last_error
+    raise PinnedRequestError("No validated address was available.")
+
+
+def fetch_page(url: str, max_bytes: int = MAX_PAGE_BYTES) -> dict:
+    """Follow redirects safely and return the final HTML page (bounded).
+
+    Every hop is re-validated against the SSRF rules. Only text/html bodies
+    are read, and never more than ``max_bytes`` after decompression.
+    """
+    current = url
+
+    for index in range(MAX_REDIRECTS + 1):
+        try:
+            normalized, addresses = validate_public_target(current)
+        except URLResolutionError as exc:
+            return {"status": "error", "reason": str(exc)}
+        except ValueError as exc:
+            return {"status": "blocked", "reason": str(exc)}
+
+        try:
+            response = _fetch_body_once(normalized, addresses, max_bytes)
+        except PinnedTimeoutError:
+            return {"status": "timeout", "reason": "URL request timed out."}
+        except PinnedRequestError:
+            return {"status": "error", "reason": "Could not connect to the URL."}
+
+        location = response["location"]
+        if response["status_code"] in REDIRECT_CODES and location:
+            if index >= MAX_REDIRECTS:
+                return {"status": "limit_reached", "reason": "Maximum redirect limit reached."}
+            current = urljoin(normalized, location)
+            continue
+
+        if not response["body"]:
+            return {
+                "status": "no_html",
+                "final_url": normalized,
+                "status_code": response["status_code"],
+                "content_type": response["content_type"],
+                "reason": "The address did not return an HTML page to inspect.",
+            }
+
+        return {
+            "status": "fetched",
+            "final_url": normalized,
+            "status_code": response["status_code"],
+            "content_type": response["content_type"],
+            "body": response["body"],
+            "truncated": response["truncated"],
+        }
+
+    return {"status": "limit_reached", "reason": "Maximum redirect limit reached."}
