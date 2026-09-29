@@ -140,3 +140,6 @@ code,pre { font-family:ui-monospace,Consolas,monospace; overflow-wrap:anywhere; 
 .overview-actions { margin:-4px 0 16px; }
 .recovery-cta { background:var(--soft); border:1px solid var(--border); color:var(--accent); font-weight:600; padding:9px 16px; border-radius:8px; cursor:pointer; }
 .recovery-cta:hover { border-color:var(--accent); }
+.hero-canvas { position:absolute; inset:0; z-index:0; }
+.hero-canvas canvas { display:block; width:100%; height:100%; }
+.shield-glow,.orbit,.hero-shield,.floating-symbol,.art-label { z-index:1; }
